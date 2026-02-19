@@ -113,8 +113,25 @@ const KnowledgeBase = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
+  const [configError, setConfigError] = useState(null);
 
   useEffect(() => {
+    const token = import.meta.env.VITE_GITHUB_TOKEN;
+    const owner = import.meta.env.VITE_REPO_OWNER;
+    const repo = import.meta.env.VITE_REPO_NAME;
+
+    if (!token || !owner || !repo) {
+      setConfigError({
+        missing: [
+          !token && 'VITE_GITHUB_TOKEN',
+          !owner && 'VITE_REPO_OWNER',
+          !repo && 'VITE_REPO_NAME'
+        ].filter(Boolean)
+      });
+      setLoading(false);
+      return;
+    }
+
     loadRoot();
   }, []);
 
@@ -254,6 +271,33 @@ const KnowledgeBase = () => {
       showToast('创建失败: ' + error.message, 'error');
     }
   };
+
+  if (configError) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8">
+          <h2 className="text-2xl font-bold text-red-600 mb-4 flex items-center">
+            <X className="mr-2" /> 配置缺失
+          </h2>
+          <p className="text-gray-600 dark:text-gray-300 mb-4">
+            检测到缺少必要的环境变量，无法连接到 GitHub。
+          </p>
+          <div className="bg-gray-100 dark:bg-gray-900 p-4 rounded-lg mb-6">
+            <h3 className="font-medium mb-2 text-gray-700 dark:text-gray-200">缺少的变量：</h3>
+            <ul className="list-disc list-inside text-red-500 text-sm font-mono space-y-1">
+              {configError.missing.map(v => <li key={v}>{v}</li>)}
+            </ul>
+          </div>
+          <p className="text-sm text-gray-500 mb-6">
+            请在 Vercel 项目设置 (Settings) -&gt; Environment Variables 中添加上述变量。
+          </p>
+          <Link to="/" className="block w-full text-center bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors">
+            返回首页
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
