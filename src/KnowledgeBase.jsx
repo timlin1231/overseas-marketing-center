@@ -401,7 +401,7 @@ const KnowledgeBase = () => {
               <div className="h-full flex flex-col items-center justify-center text-gray-400">
                 <BookOpen size={48} className="mb-4 opacity-20" />
                 <p>选择一个文件开始阅读或编辑</p>
-                <p className="text-sm mt-2 text-gray-500">双向同步已就绪: 网页 <-> GitHub <-> Obsidian</p>
+                <p className="text-sm mt-2 text-gray-500">双向同步已就绪: 网页 &lt;-&gt; GitHub &lt;-&gt; Obsidian</p>
               </div>
             )}
           </div>
