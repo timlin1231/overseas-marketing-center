@@ -46,6 +46,14 @@ function Home() {
     },
     {
       id: 4,
+      title: 'AI CRM Agent',
+      description: '智能化客户关系管理，自动跟进销售线索与邮件回复。',
+      icon: <Users className="w-8 h-8 text-gray-400" />,
+      active: false,
+      statusText: '规划中'
+    },
+    {
+      id: 5,
       title: '更多 Agent 敬请期待',
       description: '......',
       icon: <Lock className="w-8 h-8 text-gray-300" />,

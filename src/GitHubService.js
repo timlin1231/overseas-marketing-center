@@ -5,25 +5,33 @@ const BRANCH = 'main';
 
 const headers = {
   'Authorization': `token ${GITHUB_TOKEN}`,
-  'Accept': 'application/vnd.github.v3+json'
+  'Accept': 'application/vnd.github.v3+json',
+  'Content-Type': 'application/json',
+};
+
+// 辅助函数：UTF-8 转 Base64 (支持中文)
+const utf8_to_b64 = (str) => {
+  return window.btoa(unescape(encodeURIComponent(str)));
+};
+
+// 辅助函数：Base64 转 UTF-8 (支持中文)
+const b64_to_utf8 = (str) => {
+  return decodeURIComponent(escape(window.atob(str)));
 };
 
 export const getRepoContent = async (path = '') => {
-  if (!GITHUB_TOKEN || !REPO_OWNER || !REPO_NAME) {
-    console.warn('GitHub 配置缺失，使用模拟数据');
-    return null;
-  }
+  if (!GITHUB_TOKEN || !REPO_OWNER || !REPO_NAME) return null;
 
   try {
-    const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}?ref=${BRANCH}`, {
-      headers
+    // 添加时间戳防止缓存
+    const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}?ref=${BRANCH}&t=${new Date().getTime()}`, {
+      headers: { ...headers, 'Content-Type': undefined } // GET 请求不需要 Content-Type
     });
     
-    if (!response.ok) throw new Error(`GitHub API Error: ${response.statusText}`);
+    if (!response.ok) return null;
     
     const data = await response.json();
     
-    // 确保返回数组
     if (!Array.isArray(data)) {
         return [data];
     }
@@ -32,6 +40,7 @@ export const getRepoContent = async (path = '') => {
       name: item.name,
       type: item.type === 'dir' ? 'folder' : 'file',
       path: item.path,
+      sha: item.sha, // 关键：保存 SHA 以便后续更新/删除
       children: item.type === 'dir' ? [] : undefined,
       content: null
     })).filter(item => item.type === 'folder' || item.name.endsWith('.md'));
@@ -44,19 +53,94 @@ export const getRepoContent = async (path = '') => {
 
 export const getFileContent = async (path) => {
   try {
-    const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}?ref=${BRANCH}`, {
-      headers
+    const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}?ref=${BRANCH}&t=${new Date().getTime()}`, {
+      headers: { ...headers, 'Content-Type': undefined }
     });
     
-    if (!response.ok) throw new Error(`GitHub API Error: ${response.statusText}`);
+    if (!response.ok) return null;
     
     const data = await response.json();
-    // GitHub API 返回的是 base64 编码的内容
-    // 使用 decodeURIComponent(escape(atob())) 解决中文乱码问题
-    const content = decodeURIComponent(escape(atob(data.content)));
-    return content;
+    return {
+      content: b64_to_utf8(data.content),
+      sha: data.sha
+    };
   } catch (error) {
     console.error('Fetch file content failed:', error);
     return null;
+  }
+};
+
+// 创建或更新文件
+export const putFile = async (path, content, message, sha = null) => {
+  try {
+    const body = {
+      message: message,
+      content: utf8_to_b64(content),
+      branch: BRANCH
+    };
+    
+    if (sha) {
+      body.sha = sha;
+    }
+
+    const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Update failed');
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Put file failed:', error);
+    throw error;
+  }
+};
+
+// 删除文件
+export const deleteFile = async (path, sha, message) => {
+  try {
+    const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`, {
+      method: 'DELETE',
+      headers,
+      body: JSON.stringify({
+        message: message,
+        sha: sha,
+        branch: BRANCH
+      })
+    });
+
+    if (!response.ok) throw new Error('Delete failed');
+    return true;
+  } catch (error) {
+    console.error('Delete file failed:', error);
+    throw error;
+  }
+};
+
+// 全局搜索
+export const searchFiles = async (query) => {
+  try {
+    // 限制在当前仓库搜索
+    const q = `${query} repo:${REPO_OWNER}/${REPO_NAME} extension:md`;
+    const response = await fetch(`https://api.github.com/search/code?q=${encodeURIComponent(q)}`, {
+      headers: { ...headers, 'Content-Type': undefined }
+    });
+
+    if (!response.ok) return [];
+    
+    const data = await response.json();
+    return data.items.map(item => ({
+      name: item.name,
+      path: item.path,
+      type: 'file'
+    }));
+  } catch (error) {
+    console.error('Search failed:', error);
+    return [];
   }
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Folder, 
   FileText, 
@@ -10,12 +10,37 @@ import {
   Menu,
   X,
   BookOpen,
-  Loader
+  Loader,
+  Edit2,
+  Trash2,
+  Save,
+  FilePlus,
+  FolderPlus,
+  MoreVertical
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { getRepoContent, getFileContent } from './GitHubService';
+import { getRepoContent, getFileContent, putFile, deleteFile, searchFiles } from './GitHubService';
 
-const FileTree = ({ items, level = 0, onSelect, onLoadChildren }) => {
+// Toast Notification Component
+const Toast = ({ message, type, onClose }) => {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const bgColor = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+
+  return (
+    <div className={`fixed bottom-4 right-4 ${bgColor} text-white px-4 py-2 rounded-lg shadow-lg flex items-center z-50 animate-fade-in-up`}>
+      <span>{message}</span>
+      <button onClick={onClose} className="ml-2 text-white/80 hover:text-white">
+        <X size={14} />
+      </button>
+    </div>
+  );
+};
+
+const FileTree = ({ items, level = 0, onSelect, onLoadChildren, onDelete }) => {
   const [expanded, setExpanded] = useState({});
 
   const toggle = async (item) => {
@@ -32,7 +57,7 @@ const FileTree = ({ items, level = 0, onSelect, onLoadChildren }) => {
   return (
     <div className="text-sm">
       {items.map((item) => (
-        <div key={item.path}>
+        <div key={item.path} className="group relative">
           <div 
             className={`flex items-center py-1 px-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer ${level > 0 ? 'ml-4' : ''}`}
             onClick={() => item.type === 'folder' ? toggle(item) : onSelect(item)}
@@ -45,11 +70,24 @@ const FileTree = ({ items, level = 0, onSelect, onLoadChildren }) => {
             <span className="mr-2 text-blue-500">
               {item.type === 'folder' ? <Folder size={16} /> : <FileText size={16} />}
             </span>
-            <span className="truncate text-gray-700 dark:text-gray-300">{item.name}</span>
+            <span className="truncate text-gray-700 dark:text-gray-300 flex-1">{item.name}</span>
+            
+            {/* Delete Button (visible on hover) */}
+            <button 
+              className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-opacity"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm(`Are you sure you want to delete ${item.name}?`)) {
+                  onDelete(item);
+                }
+              }}
+            >
+              <Trash2 size={12} />
+            </button>
           </div>
           {item.type === 'folder' && expanded[item.path] && (
             item.children && item.children.length > 0 ? (
-              <FileTree items={item.children} level={level + 1} onSelect={onSelect} onLoadChildren={onLoadChildren} />
+              <FileTree items={item.children} level={level + 1} onSelect={onSelect} onLoadChildren={onLoadChildren} onDelete={onDelete} />
             ) : (
               <div className={`text-xs text-gray-400 py-1 ${level > 0 ? 'ml-10' : 'ml-6'}`}>
                 (Empty or Loading...)
@@ -69,10 +107,20 @@ const KnowledgeBase = () => {
   const [fileSystem, setFileSystem] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fileContentLoading, setFileContentLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
 
   useEffect(() => {
     loadRoot();
   }, []);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+  };
 
   const loadRoot = async () => {
     setLoading(true);
@@ -106,44 +154,163 @@ const KnowledgeBase = () => {
   const handleSelectFile = async (file) => {
     if (file.type === 'folder') return;
     
+    // If selecting a search result, we might not have the full file object with sha
+    // But getFileContent will return sha
+    
     setSelectedFile({ ...file, content: 'Loading...' });
     setFileContentLoading(true);
+    setIsEditing(false);
     
-    const content = await getFileContent(file.path);
-    setSelectedFile({ ...file, content: content || 'Failed to load content.' });
+    const result = await getFileContent(file.path);
+    if (result) {
+      setSelectedFile({ ...file, content: result.content, sha: result.sha });
+      setEditedContent(result.content);
+    } else {
+      setSelectedFile({ ...file, content: 'Failed to load content.' });
+    }
     setFileContentLoading(false);
   };
 
-  const handleQuickSave = (e) => {
+  const handleQuickSave = async (e) => {
     e.preventDefault();
     if (!quickInput.trim()) return;
-    alert(`已将内容保存到 00_Inbox: \n${quickInput}\n(需后端支持 GitHub API 写入)`);
-    setQuickInput('');
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `00_Inbox/Note-${timestamp}.md`;
+    const content = `# Quick Note\n\n${quickInput}\n\nCreated at: ${new Date().toLocaleString()}`;
+
+    try {
+      await putFile(filename, content, 'Quick capture from web');
+      showToast('已保存到 00_Inbox', 'success');
+      setQuickInput('');
+      
+      // Refresh root if 00_Inbox is at root or just reload root to be safe
+      loadRoot(); 
+    } catch (error) {
+      showToast('保存失败: ' + error.message, 'error');
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedFile) return;
+
+    try {
+      const result = await putFile(
+        selectedFile.path, 
+        editedContent, 
+        `Update ${selectedFile.name} from web`, 
+        selectedFile.sha
+      );
+      
+      // Update local state with new SHA
+      setSelectedFile(prev => ({ ...prev, content: editedContent, sha: result.content.sha }));
+      setIsEditing(false);
+      showToast('文件已更新', 'success');
+    } catch (error) {
+      showToast('更新失败: ' + error.message, 'error');
+    }
+  };
+
+  const handleDeleteFile = async (file) => {
+    try {
+      await deleteFile(file.path, file.sha, `Delete ${file.name} from web`);
+      showToast('文件已删除', 'success');
+      
+      if (selectedFile && selectedFile.path === file.path) {
+        setSelectedFile(null);
+      }
+      
+      // Refresh tree (simplified: reload root)
+      loadRoot();
+    } catch (error) {
+      showToast('删除失败: ' + error.message, 'error');
+    }
+  };
+
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    setIsSearching(true);
+    const results = await searchFiles(searchQuery);
+    setSearchResults(results);
+    setIsSearching(false);
+  };
+
+  const handleCreateFile = async () => {
+    const filename = prompt('Enter new file name (e.g., folder/new-note.md):');
+    if (!filename) return;
+    
+    if (!filename.endsWith('.md')) {
+        alert('Currently only .md files are supported');
+        return;
+    }
+
+    try {
+      await putFile(filename, '# New File\n', 'Create new file from web');
+      showToast('文件已创建', 'success');
+      loadRoot();
+    } catch (error) {
+      showToast('创建失败: ' + error.message, 'error');
+    }
   };
 
   return (
     <div className="flex h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
       {/* Sidebar: File Explorer */}
       <div className={`${sidebarOpen ? 'w-64' : 'w-0'} flex-shrink-0 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 flex flex-col`}>
         <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
           <div className="flex items-center font-bold text-gray-700 dark:text-gray-200">
             <BookOpen size={18} className="mr-2" />
-            <span>知识库 (GitHub)</span>
+            <span>知识库</span>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="md:hidden">
             <X size={18} />
           </button>
         </div>
         
-        <div className="p-2">
-          <div className="relative">
+        {/* Search Bar */}
+        <div className="p-2 border-b border-gray-200 dark:border-gray-800">
+          <form onSubmit={handleSearch} className="relative">
             <Search size={14} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input 
               type="text" 
-              placeholder="搜索..." 
+              placeholder="全库搜索..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
-          </div>
+          </form>
+          {searchResults.length > 0 && (
+            <div className="mt-2 max-h-32 overflow-y-auto bg-gray-50 dark:bg-gray-800 rounded-md p-1">
+                <div className="text-xs text-gray-400 px-2 py-1">搜索结果:</div>
+                {searchResults.map(result => (
+                    <div 
+                        key={result.path} 
+                        className="px-2 py-1 text-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/30 truncate"
+                        onClick={() => {
+                            handleSelectFile(result);
+                            setSearchResults([]); // Close search results
+                            setSearchQuery('');
+                        }}
+                    >
+                        {result.name}
+                    </div>
+                ))}
+            </div>
+          )}
+        </div>
+
+        {/* Toolbar */}
+        <div className="flex justify-around p-2 border-b border-gray-200 dark:border-gray-800">
+             <button onClick={handleCreateFile} className="p-1 text-gray-500 hover:text-blue-500" title="New File">
+                 <FilePlus size={16} />
+             </button>
+             <button onClick={loadRoot} className="p-1 text-gray-500 hover:text-blue-500" title="Refresh">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+             </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-2">
@@ -152,7 +319,7 @@ const KnowledgeBase = () => {
               <Loader className="animate-spin text-blue-500" size={20} />
             </div>
           ) : (
-            <FileTree items={fileSystem} onSelect={handleSelectFile} onLoadChildren={handleLoadChildren} />
+            <FileTree items={fileSystem} onSelect={handleSelectFile} onLoadChildren={handleLoadChildren} onDelete={handleDeleteFile} />
           )}
         </div>
 
@@ -174,33 +341,67 @@ const KnowledgeBase = () => {
                 <Menu size={20} />
               </button>
             )}
-            <span className="text-sm text-gray-500 dark:text-gray-400">
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
               {selectedFile ? selectedFile.name : '未选择文件'}
             </span>
           </div>
+          
+          {selectedFile && (
+            <div className="flex items-center space-x-2">
+              {isEditing ? (
+                <>
+                  <button 
+                    onClick={() => setIsEditing(false)} 
+                    className="px-3 py-1 text-sm text-gray-600 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700 rounded-md"
+                  >
+                    取消
+                  </button>
+                  <button 
+                    onClick={handleSaveEdit} 
+                    className="flex items-center px-3 py-1 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-md"
+                  >
+                    <Save size={14} className="mr-1" /> 保存
+                  </button>
+                </>
+              ) : (
+                <button 
+                  onClick={() => setIsEditing(true)} 
+                  className="flex items-center px-3 py-1 text-sm text-gray-600 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700 rounded-md"
+                >
+                  <Edit2 size={14} className="mr-1" /> 编辑
+                </button>
+              )}
+            </div>
+          )}
         </header>
 
         {/* Content & Quick Input Split */}
         <div className="flex-1 flex overflow-hidden">
           {/* Editor/Viewer Area */}
-          <div className="flex-1 p-8 overflow-y-auto bg-white dark:bg-gray-900">
+          <div className="flex-1 p-0 overflow-y-auto bg-white dark:bg-gray-900 relative">
             {selectedFile ? (
-              <div className="prose dark:prose-invert max-w-none">
-                {fileContentLoading ? (
-                   <div className="flex items-center text-gray-400">
-                      <Loader className="animate-spin mr-2" size={16} /> 加载中...
-                   </div>
-                ) : (
+              fileContentLoading ? (
+                 <div className="flex items-center justify-center h-full text-gray-400">
+                    <Loader className="animate-spin mr-2" size={24} /> 加载中...
+                 </div>
+              ) : isEditing ? (
+                <textarea 
+                  className="w-full h-full p-8 font-mono text-base bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 resize-none focus:outline-none"
+                  value={editedContent}
+                  onChange={(e) => setEditedContent(e.target.value)}
+                />
+              ) : (
+                <div className="p-8 prose dark:prose-invert max-w-none">
                   <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed">
                     {selectedFile.content}
                   </pre>
-                )}
-              </div>
+                </div>
+              )
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-gray-400">
                 <BookOpen size={48} className="mb-4 opacity-20" />
                 <p>选择一个文件开始阅读或编辑</p>
-                <p className="text-sm mt-2 text-gray-500">数据来源: GitHub 仓库</p>
+                <p className="text-sm mt-2 text-gray-500">双向同步已就绪: 网页 <-> GitHub <-> Obsidian</p>
               </div>
             )}
           </div>
@@ -213,7 +414,7 @@ const KnowledgeBase = () => {
             
             <div className="flex-1 p-4 overflow-y-auto">
               <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-xs text-blue-600 dark:text-blue-300 mb-4">
-                这里输入的内容将自动整理到 <strong>00_Inbox</strong>，稍后 AI 会帮你分类。
+                输入内容将保存为 <code>00_Inbox</code> 下的新笔记，并自动同步到您的 Obsidian。
               </div>
               
               <form onSubmit={handleQuickSave} className="flex flex-col h-full max-h-[calc(100vh-200px)]">
@@ -228,7 +429,7 @@ const KnowledgeBase = () => {
                   className="mt-4 w-full flex items-center justify-center py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
                 >
                   <Send size={16} className="mr-2" />
-                  保存到收件箱
+                  保存并同步
                 </button>
               </form>
             </div>
