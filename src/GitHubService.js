@@ -20,15 +20,26 @@ const b64_to_utf8 = (str) => {
 };
 
 export const getRepoContent = async (path = '') => {
-  if (!GITHUB_TOKEN || !REPO_OWNER || !REPO_NAME) return null;
+  if (!GITHUB_TOKEN || !REPO_OWNER || !REPO_NAME) {
+    throw new Error('Missing configuration: GITHUB_TOKEN, REPO_OWNER, or REPO_NAME');
+  }
 
   try {
     // 添加时间戳防止缓存
-    const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}?ref=${BRANCH}&t=${new Date().getTime()}`, {
+    const url = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}?ref=${BRANCH}&t=${new Date().getTime()}`;
+    const response = await fetch(url, {
       headers: { ...headers, 'Content-Type': undefined } // GET 请求不需要 Content-Type
     });
     
-    if (!response.ok) return null;
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Repository or path not found: ${REPO_OWNER}/${REPO_NAME}/${path}`);
+      }
+      if (response.status === 401) {
+        throw new Error('Authentication failed: Invalid GITHUB_TOKEN');
+      }
+      throw new Error(`GitHub API Error: ${response.status} ${response.statusText}`);
+    }
     
     const data = await response.json();
     
@@ -47,7 +58,7 @@ export const getRepoContent = async (path = '') => {
     
   } catch (error) {
     console.error('Fetch repo content failed:', error);
-    return null;
+    throw error; // Re-throw to handle in UI
   }
 };
 

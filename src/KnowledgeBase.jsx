@@ -106,6 +106,7 @@ const KnowledgeBase = () => {
   const [quickInput, setQuickInput] = useState('');
   const [fileSystem, setFileSystem] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [fileContentLoading, setFileContentLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -141,11 +142,19 @@ const KnowledgeBase = () => {
 
   const loadRoot = async () => {
     setLoading(true);
-    const data = await getRepoContent('');
-    if (data) {
-      setFileSystem(data);
+    setLoadError(null);
+    try {
+      const data = await getRepoContent('');
+      if (data) {
+        setFileSystem(data);
+      }
+    } catch (error) {
+      console.error('Failed to load root:', error);
+      setLoadError(error.message);
+      showToast(`连接 GitHub 失败: ${error.message}`, 'error');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleLoadChildren = async (folder) => {
@@ -358,14 +367,26 @@ const KnowledgeBase = () => {
         </div>
 
         <div className="flex-1 overflow-y-auto p-2">
-          {loading ? (
-            <div className="flex justify-center p-4">
-              <Loader className="animate-spin text-blue-500" size={20} />
-            </div>
-          ) : (
-            <FileTree items={fileSystem} onSelect={handleSelectFile} onLoadChildren={handleLoadChildren} onDelete={handleDeleteFile} />
-          )}
-        </div>
+            {loading ? (
+              <div className="flex flex-col items-center justify-center p-4 text-gray-400">
+                <Loader className="animate-spin text-blue-500 mb-2" size={20} />
+                <span className="text-xs">加载中...</span>
+              </div>
+            ) : loadError ? (
+              <div className="p-4 text-center">
+                <div className="text-red-500 mb-2 font-bold text-sm">连接失败</div>
+                <div className="text-xs text-gray-500 mb-4 break-words">{loadError}</div>
+                <button 
+                  onClick={loadRoot}
+                  className="px-3 py-1 bg-blue-100 text-blue-600 rounded-md text-xs hover:bg-blue-200"
+                >
+                  重试
+                </button>
+              </div>
+            ) : (
+              <FileTree items={fileSystem} onSelect={handleSelectFile} onLoadChildren={handleLoadChildren} onDelete={handleDeleteFile} />
+            )}
+          </div>
 
         <div className="p-4 border-t border-gray-200 dark:border-gray-800">
           <Link to="/" className="text-sm text-gray-500 hover:text-blue-500 flex items-center">
