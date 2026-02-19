@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { BookOpen, Globe, Bot, Moon, Sun, Lock, ArrowRight } from 'lucide-react';
+import { BookOpen, Globe, Bot, Moon, Sun, Lock, ArrowRight, Users } from 'lucide-react';
 import KnowledgeBase from './KnowledgeBase';
 
 function Home() {
