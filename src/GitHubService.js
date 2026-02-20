@@ -137,15 +137,11 @@ export const deleteFile = async (path, sha, message) => {
 export const deleteDirectory = async (path) => {
   try {
     // 1. 获取目录下所有内容 (递归)
-    // 注意：getRepoContent 只返回一层，我们需要递归获取
-    // 但为了简化，我们先尝试获取当前层级，如果是文件直接删，如果是文件夹递归删
-    
-    // 获取内容
+    // 限制获取内容时 headers 必须包含 token
     const url = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}?ref=${BRANCH}`;
     const response = await fetch(url, { headers });
     
     if (!response.ok) {
-       // 如果已经是 404，说明目录不存在，直接返回成功
        if (response.status === 404) return true;
        throw new Error(`Failed to list directory: ${response.statusText}`);
     }
@@ -153,8 +149,6 @@ export const deleteDirectory = async (path) => {
     const items = await response.json();
     
     if (!Array.isArray(items)) {
-        // 如果不是数组，说明可能是单个文件（不应该发生，因为我们操作的是目录）
-        // 但为了健壮性，当作文件删除
         return deleteFile(items.path, items.sha, `Delete ${items.name}`);
     }
 

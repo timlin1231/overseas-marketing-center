@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getRepoContent, getFileContent, putFile, deleteFile, deleteDirectory, createDirectory, searchFiles } from './GitHubService';
+import RichEditor from './components/RichEditor';
+import { ConfirmModal, InputModal } from './components/Modals';
 
 // Toast Notification Component
 const Toast = ({ message, type, onClose }) => {
@@ -118,6 +120,10 @@ const KnowledgeBase = () => {
   const [folders, setFolders] = useState(['00_Inbox']); // 默认目录
   const [selectedFolder, setSelectedFolder] = useState('00_Inbox');
   const [autoSaving, setAutoSaving] = useState(false);
+  
+  // Modals state
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+  const [inputModal, setInputModal] = useState({ isOpen: false, title: '', message: '', placeholder: '', onConfirm: () => {} });
 
   useEffect(() => {
     const token = import.meta.env.VITE_GITHUB_TOKEN;
@@ -278,29 +284,36 @@ ${quickInput}
     }
   };
 
-  const handleDelete = async (item) => {
-      try {
+  const handleDelete = (item) => {
+    setConfirmModal({
+      isOpen: true,
+      title: item.type === 'folder' ? '删除文件夹' : '删除文件',
+      message: item.type === 'folder' 
+        ? `确定要删除文件夹 "${item.name}" 及其所有内容吗？此操作不可恢复！`
+        : `确定要删除文件 "${item.name}" 吗？`,
+      onConfirm: async () => {
+        try {
           if (item.type === 'folder') {
-              if (!window.confirm(`确定要删除文件夹 "${item.name}" 及其所有内容吗？此操作不可恢复！`)) return;
-              await deleteDirectory(item.path);
-              showToast('文件夹已删除', 'success');
+            await deleteDirectory(item.path);
+            showToast('文件夹已删除', 'success');
           } else {
-              if (!window.confirm(`确定要删除文件 "${item.name}" 吗？`)) return;
-              await deleteFile(item.path, item.sha, `Delete ${item.name}`);
-              showToast('文件已删除', 'success');
+            await deleteFile(item.path, item.sha, `Delete ${item.name}`);
+            showToast('文件已删除', 'success');
           }
           
           if (selectedFile && selectedFile.path.startsWith(item.path)) {
-              setSelectedFile(null);
+            setSelectedFile(null);
           }
           loadRoot();
-      } catch (error) {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        } catch (error) {
           showToast('删除失败: ' + error.message, 'error');
+        }
       }
+    });
   };
 
   // 移除旧的 handleDeleteFile，合并到 handleDelete
-
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -312,34 +325,34 @@ ${quickInput}
     setIsSearching(false);
   };
 
-  const handleCreateFile = async () => {
-    const filename = prompt('输入新文件名 (e.g., folder/new-note.md) 或新文件夹名 (e.g., folder/)');
-    if (!filename) return;
-    
-    if (filename.endsWith('/')) {
-        // 创建文件夹
+  const handleCreateFile = () => {
+    setInputModal({
+      isOpen: true,
+      title: '新建文件或文件夹',
+      message: '输入文件名以 .md 结尾，或者输入文件夹名以 / 结尾',
+      placeholder: 'e.g., folder/new-note.md or new-folder/',
+      onConfirm: async (filename) => {
+        if (!filename) return;
+        
         try {
+          if (filename.endsWith('/')) {
             await createDirectory(filename);
             showToast('文件夹已创建', 'success');
-            loadRoot();
-        } catch (error) {
-            showToast('创建文件夹失败: ' + error.message, 'error');
-        }
-    } else {
-        // 创建文件
-        if (!filename.endsWith('.md')) {
-            alert('当前仅支持 .md 文件');
-            return;
-        }
-
-        try {
+          } else {
+            if (!filename.endsWith('.md')) {
+              showToast('当前仅支持 .md 文件', 'error');
+              return;
+            }
             await putFile(filename, '# New File\n', 'Create new file from web');
             showToast('文件已创建', 'success');
-            loadRoot();
+          }
+          loadRoot();
+          setInputModal(prev => ({ ...prev, isOpen: false }));
         } catch (error) {
-            showToast('创建失败: ' + error.message, 'error');
+          showToast('创建失败: ' + error.message, 'error');
         }
-    }
+      }
+    });
   };
 
   if (configError) {
@@ -372,6 +385,23 @@ ${quickInput}
   return (
     <div className="flex h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      
+      {/* Modals */}
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen} 
+        title={confirmModal.title} 
+        message={confirmModal.message} 
+        onConfirm={confirmModal.onConfirm} 
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} 
+      />
+      <InputModal 
+        isOpen={inputModal.isOpen} 
+        title={inputModal.title} 
+        message={inputModal.message} 
+        placeholder={inputModal.placeholder}
+        onConfirm={inputModal.onConfirm} 
+        onCancel={() => setInputModal(prev => ({ ...prev, isOpen: false }))} 
+      />
 
       {/* Sidebar: File Explorer */}
       <div className={`${sidebarOpen ? 'w-64' : 'w-0'} flex-shrink-0 border-r border-gray-200 dark:border-gray-800 transition-all duration-300 flex flex-col`}>
@@ -512,10 +542,9 @@ ${quickInput}
                     <Loader className="animate-spin mr-2" size={24} /> 加载中...
                  </div>
               ) : isEditing ? (
-                <textarea 
-                  className="w-full h-full p-8 font-mono text-base bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 resize-none focus:outline-none"
-                  value={editedContent}
-                  onChange={(e) => setEditedContent(e.target.value)}
+                <RichEditor 
+                  content={editedContent} 
+                  onChange={setEditedContent} 
                 />
               ) : (
                 <div className="p-8 prose dark:prose-invert max-w-none">
