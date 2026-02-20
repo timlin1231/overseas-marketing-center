@@ -133,6 +133,63 @@ export const deleteFile = async (path, sha, message) => {
   }
 };
 
+// 递归删除文件夹
+export const deleteDirectory = async (path) => {
+  try {
+    // 1. 获取目录下所有内容 (递归)
+    // 注意：getRepoContent 只返回一层，我们需要递归获取
+    // 但为了简化，我们先尝试获取当前层级，如果是文件直接删，如果是文件夹递归删
+    
+    // 获取内容
+    const url = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}?ref=${BRANCH}`;
+    const response = await fetch(url, { headers });
+    
+    if (!response.ok) {
+       // 如果已经是 404，说明目录不存在，直接返回成功
+       if (response.status === 404) return true;
+       throw new Error(`Failed to list directory: ${response.statusText}`);
+    }
+    
+    const items = await response.json();
+    
+    if (!Array.isArray(items)) {
+        // 如果不是数组，说明可能是单个文件（不应该发生，因为我们操作的是目录）
+        // 但为了健壮性，当作文件删除
+        return deleteFile(items.path, items.sha, `Delete ${items.name}`);
+    }
+
+    // 2. 并行删除所有文件和子目录
+    const promises = items.map(async (item) => {
+      if (item.type === 'dir') {
+        return deleteDirectory(item.path);
+      } else {
+        return deleteFile(item.path, item.sha, `Delete ${item.name} via web`);
+      }
+    });
+
+    await Promise.all(promises);
+    return true;
+  } catch (error) {
+    console.error('Delete directory failed:', error);
+    throw error;
+  }
+};
+
+// 创建文件夹 (通过创建 .gitkeep)
+export const createDirectory = async (path) => {
+  try {
+    // 移除末尾的斜杠
+    const cleanPath = path.endsWith('/') ? path.slice(0, -1) : path;
+    const gitkeepPath = `${cleanPath}/.gitkeep`;
+    
+    await putFile(gitkeepPath, '', `Create directory ${cleanPath}`);
+    return true;
+  } catch (error) {
+    console.error('Create directory failed:', error);
+    throw error;
+  }
+};
+
 // 全局搜索
 export const searchFiles = async (query) => {
   try {

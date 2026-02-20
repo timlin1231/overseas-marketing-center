@@ -19,7 +19,7 @@ import {
   MoreVertical
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { getRepoContent, getFileContent, putFile, deleteFile, searchFiles } from './GitHubService';
+import { getRepoContent, getFileContent, putFile, deleteFile, deleteDirectory, createDirectory, searchFiles } from './GitHubService';
 
 // Toast Notification Component
 const Toast = ({ message, type, onClose }) => {
@@ -115,6 +115,9 @@ const KnowledgeBase = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [configError, setConfigError] = useState(null);
+  const [folders, setFolders] = useState(['00_Inbox']); // 默认目录
+  const [selectedFolder, setSelectedFolder] = useState('00_Inbox');
+  const [autoSaving, setAutoSaving] = useState(false);
 
   useEffect(() => {
     const token = import.meta.env.VITE_GITHUB_TOKEN;
@@ -140,6 +143,19 @@ const KnowledgeBase = () => {
     setToast({ message, type });
   };
 
+  // 自动保存逻辑
+  useEffect(() => {
+    if (!isEditing || !selectedFile || editedContent === selectedFile.content) return;
+
+    const timer = setTimeout(async () => {
+      setAutoSaving(true);
+      await handleSaveEdit(true); // true 表示静默保存，不弹 Toast
+      setAutoSaving(false);
+    }, 3000); // 3秒后自动保存
+
+    return () => clearTimeout(timer);
+  }, [editedContent, isEditing, selectedFile]);
+
   const loadRoot = async () => {
     setLoading(true);
     setLoadError(null);
@@ -147,6 +163,17 @@ const KnowledgeBase = () => {
       const data = await getRepoContent('');
       if (data) {
         setFileSystem(data);
+        // 提取文件夹列表供选择
+        const dirs = data
+          .filter(item => item.type === 'folder' && !item.name.startsWith('.'))
+          .map(item => item.name);
+        if (dirs.length > 0) {
+            setFolders(dirs);
+            // 如果默认选中的文件夹不存在（比如被删除了），重置为第一个
+            if (!dirs.includes(selectedFolder) && selectedFolder !== '00_Inbox') {
+                setSelectedFolder(dirs[0]);
+            }
+        }
       }
     } catch (error) {
       console.error('Failed to load root:', error);
@@ -202,22 +229,34 @@ const KnowledgeBase = () => {
     if (!quickInput.trim()) return;
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const filename = `00_Inbox/Note-${timestamp}.md`;
-    const content = `# Quick Note\n\n${quickInput}\n\nCreated at: ${new Date().toLocaleString()}`;
+    const folder = selectedFolder || '00_Inbox';
+    const filename = `${folder}/Note-${timestamp}.md`;
+    
+    // 生成标准笔记格式 (Frontmatter)
+    const content = `---
+date: ${new Date().toISOString()}
+type: quick-capture
+status: inbox
+---
+
+# Quick Note
+
+${quickInput}
+`;
 
     try {
       await putFile(filename, content, 'Quick capture from web');
-      showToast('已保存到 00_Inbox', 'success');
+      showToast(`已保存到 ${folder}`, 'success');
       setQuickInput('');
       
-      // Refresh root if 00_Inbox is at root or just reload root to be safe
+      // Refresh root if we saved to a folder in root
       loadRoot(); 
     } catch (error) {
       showToast('保存失败: ' + error.message, 'error');
     }
   };
 
-  const handleSaveEdit = async () => {
+  const handleSaveEdit = async (silent = false) => {
     if (!selectedFile) return;
 
     try {
@@ -230,28 +269,38 @@ const KnowledgeBase = () => {
       
       // Update local state with new SHA
       setSelectedFile(prev => ({ ...prev, content: editedContent, sha: result.content.sha }));
-      setIsEditing(false);
-      showToast('文件已更新', 'success');
+      if (!silent) {
+        setIsEditing(false);
+        showToast('文件已更新', 'success');
+      }
     } catch (error) {
-      showToast('更新失败: ' + error.message, 'error');
+      if (!silent) showToast('更新失败: ' + error.message, 'error');
     }
   };
 
-  const handleDeleteFile = async (file) => {
-    try {
-      await deleteFile(file.path, file.sha, `Delete ${file.name} from web`);
-      showToast('文件已删除', 'success');
-      
-      if (selectedFile && selectedFile.path === file.path) {
-        setSelectedFile(null);
+  const handleDelete = async (item) => {
+      try {
+          if (item.type === 'folder') {
+              if (!window.confirm(`确定要删除文件夹 "${item.name}" 及其所有内容吗？此操作不可恢复！`)) return;
+              await deleteDirectory(item.path);
+              showToast('文件夹已删除', 'success');
+          } else {
+              if (!window.confirm(`确定要删除文件 "${item.name}" 吗？`)) return;
+              await deleteFile(item.path, item.sha, `Delete ${item.name}`);
+              showToast('文件已删除', 'success');
+          }
+          
+          if (selectedFile && selectedFile.path.startsWith(item.path)) {
+              setSelectedFile(null);
+          }
+          loadRoot();
+      } catch (error) {
+          showToast('删除失败: ' + error.message, 'error');
       }
-      
-      // Refresh tree (simplified: reload root)
-      loadRoot();
-    } catch (error) {
-      showToast('删除失败: ' + error.message, 'error');
-    }
   };
+
+  // 移除旧的 handleDeleteFile，合并到 handleDelete
+
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -264,20 +313,32 @@ const KnowledgeBase = () => {
   };
 
   const handleCreateFile = async () => {
-    const filename = prompt('Enter new file name (e.g., folder/new-note.md):');
+    const filename = prompt('输入新文件名 (e.g., folder/new-note.md) 或新文件夹名 (e.g., folder/)');
     if (!filename) return;
     
-    if (!filename.endsWith('.md')) {
-        alert('Currently only .md files are supported');
-        return;
-    }
+    if (filename.endsWith('/')) {
+        // 创建文件夹
+        try {
+            await createDirectory(filename);
+            showToast('文件夹已创建', 'success');
+            loadRoot();
+        } catch (error) {
+            showToast('创建文件夹失败: ' + error.message, 'error');
+        }
+    } else {
+        // 创建文件
+        if (!filename.endsWith('.md')) {
+            alert('当前仅支持 .md 文件');
+            return;
+        }
 
-    try {
-      await putFile(filename, '# New File\n', 'Create new file from web');
-      showToast('文件已创建', 'success');
-      loadRoot();
-    } catch (error) {
-      showToast('创建失败: ' + error.message, 'error');
+        try {
+            await putFile(filename, '# New File\n', 'Create new file from web');
+            showToast('文件已创建', 'success');
+            loadRoot();
+        } catch (error) {
+            showToast('创建失败: ' + error.message, 'error');
+        }
     }
   };
 
@@ -384,7 +445,7 @@ const KnowledgeBase = () => {
                 </button>
               </div>
             ) : (
-              <FileTree items={fileSystem} onSelect={handleSelectFile} onLoadChildren={handleLoadChildren} onDelete={handleDeleteFile} />
+              <FileTree items={fileSystem} onSelect={handleSelectFile} onLoadChildren={handleLoadChildren} onDelete={handleDelete} />
             )}
           </div>
 
@@ -413,6 +474,7 @@ const KnowledgeBase = () => {
           
           {selectedFile && (
             <div className="flex items-center space-x-2">
+              {autoSaving && <span className="text-xs text-gray-400 mr-2">自动保存中...</span>}
               {isEditing ? (
                 <>
                   <button 
@@ -422,7 +484,7 @@ const KnowledgeBase = () => {
                     取消
                   </button>
                   <button 
-                    onClick={handleSaveEdit} 
+                    onClick={() => handleSaveEdit(false)} 
                     className="flex items-center px-3 py-1 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-md"
                   >
                     <Save size={14} className="mr-1" /> 保存
@@ -479,10 +541,21 @@ const KnowledgeBase = () => {
             
             <div className="flex-1 p-4 overflow-y-auto">
               <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-xs text-blue-600 dark:text-blue-300 mb-4">
-                输入内容将保存为 <code>00_Inbox</code> 下的新笔记，并自动同步到您的 Obsidian。
+                输入内容将保存为新笔记，并自动同步到您的 Obsidian。
               </div>
               
               <form onSubmit={handleQuickSave} className="flex flex-col h-full max-h-[calc(100vh-200px)]">
+                <div className="mb-2">
+                    <label className="text-xs text-gray-500 mb-1 block">存入目录</label>
+                    <select 
+                        className="w-full p-2 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={selectedFolder}
+                        onChange={(e) => setSelectedFolder(e.target.value)}
+                    >
+                        {folders.map(f => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                </div>
+
                 <textarea 
                   className="flex-1 w-full p-3 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                   placeholder="写下你的想法、待办或会议要点..."
