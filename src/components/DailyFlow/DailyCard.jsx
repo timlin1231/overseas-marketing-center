@@ -109,9 +109,13 @@ const DailyCard = ({ note, onUpdate }) => {
 
       {/* Card Content */}
       {isExpanded && (
-        <div className="p-4 pt-0 border-t-0 min-h-[100px]" onClick={() => !isEditing && setIsEditing(true)}>
+        <div className="p-4 pt-0 border-t-0 min-h-[100px]" onClick={(e) => {
+          // Prevent collapsing when clicking content area
+          e.stopPropagation();
+          if (!isEditing) setIsEditing(true);
+        }}>
           {isEditing ? (
-            <div className="min-h-[200px]">
+            <div className="min-h-[200px]" onClick={(e) => e.stopPropagation()}>
                <RichEditor 
                   content={content} 
                   onChange={setContent} 

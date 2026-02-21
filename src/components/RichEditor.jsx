@@ -83,14 +83,21 @@ const MenuBar = ({ editor }) => {
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-1 p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 sticky top-0 z-10">
+    <div 
+      className="flex flex-wrap items-center gap-1 p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 sticky top-0 z-10"
+      onClick={(e) => e.stopPropagation()} // Prevent bubble to DailyCard toggle
+    >
       {buttons.map((btn, index) => (
         btn.type === 'divider' ? (
           <div key={index} className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
         ) : (
           <button
             key={index}
-            onClick={btn.action}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation(); // Double safety
+              btn.action();
+            }}
             title={btn.title}
             className={classNames(
               'p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors',
