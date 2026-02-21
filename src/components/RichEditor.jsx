@@ -1,4 +1,4 @@
-import React, { useEffect, useImperativeHandle, forwardRef } from 'react';
+import { useEffect, useImperativeHandle, forwardRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -11,7 +11,7 @@ import classNames from 'classnames';
 import { 
   Bold, Italic, Strikethrough, Code, 
   Heading1, Heading2, List, ListOrdered, 
-  Quote, Image as ImageIcon, Link as LinkIcon 
+  Quote
 } from 'lucide-react';
 
 // Setup lowlight for syntax highlighting
@@ -112,7 +112,7 @@ const MenuBar = ({ editor }) => {
   );
 };
 
-const RichEditor = forwardRef(({ content, onChange, onHeadingsUpdate, editable = true }, ref) => {
+const RichEditor = forwardRef(({ content, onChange, onHeadingsUpdate, editable = true, autoFocus = false }, ref) => {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -187,10 +187,10 @@ const RichEditor = forwardRef(({ content, onChange, onHeadingsUpdate, editable =
   }, [content, editor]);
 
   useEffect(() => {
-    if (editor && editable) {
+    if (editor && editable && autoFocus) {
       editor.commands.focus('end');
     }
-  }, [editor, editable]);
+  }, [editor, editable, autoFocus]);
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-900">

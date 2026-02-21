@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import RichEditor from '../RichEditor';
-import { Calendar, ChevronDown, ChevronUp, Edit2, Save } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import { getFileContent, putFile } from '../../GitHubService';
 
 const sanitizeDailyContent = (raw, dateStr) => {
@@ -19,43 +19,65 @@ const DailyCard = ({ note, onUpdate }) => {
   const isToday = new Date().toDateString() === date.toDateString();
 
   const [isExpanded, setIsExpanded] = useState(isToday); // 仅今天默认展开
-  const [isEditing, setIsEditing] = useState(false);
-  const [content, setContent] = useState(sanitizeDailyContent(note.content || '', note.date));
+  const initialContent = useMemo(() => sanitizeDailyContent(note.content || '', note.date), [note.content, note.date]);
+  const [content, setContent] = useState(initialContent);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
+  const lastSavedRef = useRef(initialContent);
+  const saveTimerRef = useRef(null);
 
-  React.useEffect(() => {
-    if (!isEditing) {
-      setContent(sanitizeDailyContent(note.content || '', note.date));
+  useEffect(() => {
+    if (isDirty) return;
+    const next = sanitizeDailyContent(note.content || '', note.date);
+    setContent(next);
+    lastSavedRef.current = next;
+  }, [note.content, note.date, isDirty]);
+
+  const saveNow = useCallback(async () => {
+    const next = sanitizeDailyContent(content, note.date);
+    if (next === lastSavedRef.current) {
+      setIsDirty(false);
+      return;
     }
-  }, [note.content, note.date, isEditing]);
 
-  const handleSave = async () => {
     setIsSaving(true);
     try {
-      const newContent = sanitizeDailyContent(content, note.date);
-
       const latest = await getFileContent(note.path);
       const shaToUse = latest?.sha || note.sha;
-
-      const result = await putFile(
-        note.path,
-        newContent,
-        `Update daily note ${note.date}`,
-        shaToUse
-      );
-      
+      const result = await putFile(note.path, next, `Update daily note ${note.date}`, shaToUse);
+      lastSavedRef.current = next;
+      setContent(next);
+      setIsDirty(false);
       if (onUpdate) {
-        onUpdate({ ...note, content: newContent, sha: result.content.sha, isNew: false });
+        onUpdate({ ...note, content: next, sha: result.content.sha, isNew: false });
       }
-      setContent(newContent);
-      setIsEditing(false);
     } catch (error) {
       console.error('Save failed:', error);
       alert('保存失败: ' + error.message);
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [content, note.date, note.path, note.sha, onUpdate]);
+
+  useEffect(() => {
+    if (!isExpanded) return;
+    if (!isDirty) return;
+
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+
+    saveTimerRef.current = setTimeout(() => {
+      saveNow();
+    }, 1200);
+
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+    };
+  }, [isDirty, isExpanded, saveNow]);
 
   return (
     <div className={`mb-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 transition-all duration-200 ${isToday ? 'ring-1 ring-blue-500/30' : ''}`}>
@@ -79,35 +101,13 @@ const DailyCard = ({ note, onUpdate }) => {
           </div>
         </div>
         
-        <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center space-x-2" onClick={e => e.stopPropagation()}>
           {isExpanded && (
-            isEditing ? (
-              <>
-                <button 
-                  onClick={() => setIsEditing(false)}
-                  className="px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-200 rounded-md"
-                >
-                  取消
-                </button>
-                <button 
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  className="px-3 py-1.5 text-xs bg-blue-600 text-white hover:bg-blue-700 rounded-md flex items-center"
-                >
-                  {isSaving ? '保存中...' : <><Save size={12} className="mr-1" /> 保存</>}
-                </button>
-              </>
-            ) : (
-              <button 
-                onClick={() => setIsEditing(true)}
-                className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-                title="编辑"
-              >
-                <Edit2 size={16} />
-              </button>
-            )
+            <span className="text-xs text-gray-400">
+              {isSaving ? '保存中...' : isDirty ? '未保存' : '已保存'}
+            </span>
           )}
-          <button className="text-gray-400 hover:text-gray-600">
+          <button className="text-gray-400 hover:text-gray-600" onClick={() => setIsExpanded(!isExpanded)}>
             {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
           </button>
         </div>
@@ -115,26 +115,19 @@ const DailyCard = ({ note, onUpdate }) => {
 
       {/* Card Content */}
       {isExpanded && (
-        <div className="p-4 pt-0 border-t-0 min-h-[100px]" onClick={(e) => {
-          // Prevent collapsing when clicking content area
-          e.stopPropagation();
-          if (!isEditing) setIsEditing(true);
-        }}>
-          {isEditing ? (
-            <div className="min-h-[200px]" onClick={(e) => e.stopPropagation()}>
-               <RichEditor 
-                  content={content} 
-                  onChange={setContent} 
-               />
-            </div>
-          ) : (
-            <div className="max-w-none text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-               <RichEditor 
-                  content={content}
-                  editable={false}
-               />
-            </div>
-          )}
+        <div className="p-4 pt-0 border-t-0 min-h-[140px]" onClick={(e) => e.stopPropagation()}>
+          <div className="min-h-[220px]" onClick={(e) => e.stopPropagation()}>
+            <RichEditor
+              content={content}
+              editable={true}
+              autoFocus={isToday}
+              onChange={(next) => {
+                const cleaned = sanitizeDailyContent(next, note.date);
+                setContent(cleaned);
+                setIsDirty(cleaned !== lastSavedRef.current);
+              }}
+            />
+          </div>
         </div>
       )}
     </div>
