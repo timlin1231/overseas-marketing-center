@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useImperativeHandle, forwardRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -105,7 +105,7 @@ const MenuBar = ({ editor }) => {
   );
 };
 
-const RichEditor = ({ content, onChange, editable = true }) => {
+const RichEditor = forwardRef(({ content, onChange, onHeadingsUpdate, editable = true }, ref) => {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -125,18 +125,54 @@ const RichEditor = ({ content, onChange, editable = true }) => {
     onUpdate: ({ editor }) => {
       // Save as Markdown
       onChange(editor.storage.markdown.getMarkdown());
+      
+      // Update headings for TOC
+      if (onHeadingsUpdate) {
+        const headings = [];
+        editor.state.doc.descendants((node, pos) => {
+          if (node.type.name === 'heading') {
+            headings.push({
+              level: node.attrs.level,
+              text: node.textContent,
+              pos: pos,
+            });
+          }
+        });
+        onHeadingsUpdate(headings);
+      }
     },
   });
+
+  useImperativeHandle(ref, () => ({
+    scrollToHeading: (pos) => {
+      if (editor) {
+        editor.commands.setTextSelection(pos);
+        editor.commands.scrollIntoView();
+        editor.commands.focus();
+      }
+    }
+  }));
 
   // Update content if it changes externally (e.g. selecting a different file)
   useEffect(() => {
     if (editor && content) {
-      // Check if current editor content matches the new content (to avoid loop/cursor jump)
-      // Since we convert MD <-> HTML, exact string match is hard.
-      // We rely on the parent to only update `content` when switching files.
-      // Or we can check if the editor is focused.
       if (!editor.isFocused) {
          editor.commands.setContent(marked(content));
+         
+         // Also update headings initially
+         const headings = [];
+         editor.state.doc.descendants((node, pos) => {
+           if (node.type.name === 'heading') {
+             headings.push({
+               level: node.attrs.level,
+               text: node.textContent,
+               pos: pos,
+             });
+           }
+         });
+         if (onHeadingsUpdate) {
+            onHeadingsUpdate(headings);
+         }
       }
     }
   }, [content, editor]);
@@ -147,6 +183,8 @@ const RichEditor = ({ content, onChange, editable = true }) => {
       <EditorContent editor={editor} className="flex-1 overflow-y-auto prose dark:prose-invert max-w-none p-4 focus:outline-none" />
     </div>
   );
-};
+});
+
+RichEditor.displayName = 'RichEditor';
 
 export default RichEditor;

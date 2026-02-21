@@ -121,6 +121,11 @@ const KnowledgeBase = () => {
   const [selectedFolder, setSelectedFolder] = useState('00_Inbox');
   const [autoSaving, setAutoSaving] = useState(false);
   
+  // TOC State
+  const editorRef = useRef(null);
+  const [tocItems, setTocItems] = useState([]);
+  const [sidebarTab, setSidebarTab] = useState('files'); // 'files' | 'outline'
+  
   // Modals state
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   const [inputModal, setInputModal] = useState({ isOpen: false, title: '', message: '', placeholder: '', onConfirm: () => {} });
@@ -218,7 +223,8 @@ const KnowledgeBase = () => {
     
     setSelectedFile({ ...file, content: 'Loading...' });
     setFileContentLoading(true);
-    setIsEditing(false);
+    // setIsEditing(false); // Remove editing state toggle
+    setTocItems([]); // Reset TOC
     
     const result = await getFileContent(file.path);
     if (result) {
@@ -276,7 +282,7 @@ ${quickInput}
       // Update local state with new SHA
       setSelectedFile(prev => ({ ...prev, content: editedContent, sha: result.content.sha }));
       if (!silent) {
-        setIsEditing(false);
+        // setIsEditing(false); // Remove editing state toggle
         showToast('文件已更新', 'success');
       }
     } catch (error) {
@@ -415,69 +421,117 @@ ${quickInput}
           </button>
         </div>
         
-        {/* Search Bar */}
-        <div className="p-2 border-b border-gray-200 dark:border-gray-800">
-          <form onSubmit={handleSearch} className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input 
-              type="text" 
-              placeholder="全库搜索..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </form>
-          {searchResults.length > 0 && (
-            <div className="mt-2 max-h-32 overflow-y-auto bg-gray-50 dark:bg-gray-800 rounded-md p-1">
-                <div className="text-xs text-gray-400 px-2 py-1">搜索结果:</div>
-                {searchResults.map(result => (
-                    <div 
-                        key={result.path} 
-                        className="px-2 py-1 text-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/30 truncate"
-                        onClick={() => {
-                            handleSelectFile(result);
-                            setSearchResults([]); // Close search results
-                            setSearchQuery('');
-                        }}
+        {/* Sidebar Tabs */}
+        <div className="flex border-b border-gray-200 dark:border-gray-800">
+          <button 
+            className={`flex-1 py-2 text-sm font-medium ${sidebarTab === 'files' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+            onClick={() => setSidebarTab('files')}
+          >
+            文件
+          </button>
+          <button 
+            className={`flex-1 py-2 text-sm font-medium ${sidebarTab === 'outline' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'}`}
+            onClick={() => setSidebarTab('outline')}
+          >
+            大纲
+          </button>
+        </div>
+        
+        {/* Sidebar Content */}
+        <div className="flex-1 overflow-y-auto p-2">
+          {sidebarTab === 'files' ? (
+            <>
+              {/* Search Bar */}
+              <div className="mb-2">
+                <form onSubmit={handleSearch} className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input 
+                    type="text" 
+                    placeholder="全库搜索..." 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-800 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                </form>
+                {searchResults.length > 0 && (
+                  <div className="mt-2 max-h-32 overflow-y-auto bg-gray-50 dark:bg-gray-800 rounded-md p-1">
+                      <div className="text-xs text-gray-400 px-2 py-1">搜索结果:</div>
+                      {searchResults.map(result => (
+                          <div 
+                              key={result.path} 
+                              className="px-2 py-1 text-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/30 truncate"
+                              onClick={() => {
+                                  handleSelectFile(result);
+                                  setSearchResults([]); // Close search results
+                                  setSearchQuery('');
+                              }}
+                          >
+                              {result.name}
+                          </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Toolbar */}
+              <div className="flex justify-around mb-2 pb-2 border-b border-gray-200 dark:border-gray-800">
+                   <button onClick={handleCreateFile} className="p-1 text-gray-500 hover:text-blue-500" title="New File">
+                       <FilePlus size={16} />
+                   </button>
+                   <button onClick={loadRoot} className="p-1 text-gray-500 hover:text-blue-500" title="Refresh">
+                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+                   </button>
+              </div>
+
+              {/* File Tree */}
+              {loading ? (
+                <div className="flex flex-col items-center justify-center p-4 text-gray-400">
+                  <Loader className="animate-spin text-blue-500 mb-2" size={20} />
+                  <span className="text-xs">加载中...</span>
+                </div>
+              ) : loadError ? (
+                <div className="p-4 text-center">
+                  <div className="text-red-500 mb-2 font-bold text-sm">连接失败</div>
+                  <div className="text-xs text-gray-500 mb-4 break-words">{loadError}</div>
+                  <button 
+                    onClick={loadRoot}
+                    className="px-3 py-1 bg-blue-100 text-blue-600 rounded-md text-xs hover:bg-blue-200"
+                  >
+                    重试
+                  </button>
+                </div>
+              ) : (
+                <FileTree items={fileSystem} onSelect={handleSelectFile} onLoadChildren={handleLoadChildren} onDelete={handleDelete} />
+              )}
+            </>
+          ) : (
+            /* Outline Tab Content */
+            <div className="text-sm">
+              {tocItems.length > 0 ? (
+                <ul className="space-y-1">
+                  {tocItems.map((item, index) => (
+                    <li 
+                      key={index}
+                      className="cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 truncate"
+                      style={{ paddingLeft: `${(item.level - 1) * 12}px` }}
+                      onClick={() => {
+                        if (editorRef.current) {
+                          editorRef.current.scrollToHeading(item.pos);
+                        }
+                      }}
                     >
-                        {result.name}
-                    </div>
-                ))}
+                      {item.text}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="text-gray-400 text-center p-4 text-xs">
+                  暂无大纲
+                </div>
+              )}
             </div>
           )}
         </div>
-
-        {/* Toolbar */}
-        <div className="flex justify-around p-2 border-b border-gray-200 dark:border-gray-800">
-             <button onClick={handleCreateFile} className="p-1 text-gray-500 hover:text-blue-500" title="New File">
-                 <FilePlus size={16} />
-             </button>
-             <button onClick={loadRoot} className="p-1 text-gray-500 hover:text-blue-500" title="Refresh">
-                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
-             </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-2">
-            {loading ? (
-              <div className="flex flex-col items-center justify-center p-4 text-gray-400">
-                <Loader className="animate-spin text-blue-500 mb-2" size={20} />
-                <span className="text-xs">加载中...</span>
-              </div>
-            ) : loadError ? (
-              <div className="p-4 text-center">
-                <div className="text-red-500 mb-2 font-bold text-sm">连接失败</div>
-                <div className="text-xs text-gray-500 mb-4 break-words">{loadError}</div>
-                <button 
-                  onClick={loadRoot}
-                  className="px-3 py-1 bg-blue-100 text-blue-600 rounded-md text-xs hover:bg-blue-200"
-                >
-                  重试
-                </button>
-              </div>
-            ) : (
-              <FileTree items={fileSystem} onSelect={handleSelectFile} onLoadChildren={handleLoadChildren} onDelete={handleDelete} />
-            )}
-          </div>
 
         <div className="p-4 border-t border-gray-200 dark:border-gray-800">
           <Link to="/" className="text-sm text-gray-500 hover:text-blue-500 flex items-center">
@@ -504,29 +558,12 @@ ${quickInput}
           
           {selectedFile && (
             <div className="flex items-center space-x-2">
-              {autoSaving && <span className="text-xs text-gray-400 mr-2">自动保存中...</span>}
-              {isEditing ? (
-                <>
-                  <button 
-                    onClick={() => setIsEditing(false)} 
-                    className="px-3 py-1 text-sm text-gray-600 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700 rounded-md"
-                  >
-                    取消
-                  </button>
-                  <button 
-                    onClick={() => handleSaveEdit(false)} 
-                    className="flex items-center px-3 py-1 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-md"
-                  >
-                    <Save size={14} className="mr-1" /> 保存
-                  </button>
-                </>
+              {autoSaving ? (
+                <span className="text-xs text-gray-400 mr-2 flex items-center">
+                  <Loader size={12} className="animate-spin mr-1" /> 自动保存中...
+                </span>
               ) : (
-                <button 
-                  onClick={() => setIsEditing(true)} 
-                  className="flex items-center px-3 py-1 text-sm text-gray-600 hover:bg-gray-200 dark:text-gray-300 dark:hover:bg-gray-700 rounded-md"
-                >
-                  <Edit2 size={14} className="mr-1" /> 编辑
-                </button>
+                <span className="text-xs text-gray-400 mr-2">已保存</span>
               )}
             </div>
           )}
@@ -541,17 +578,13 @@ ${quickInput}
                  <div className="flex items-center justify-center h-full text-gray-400">
                     <Loader className="animate-spin mr-2" size={24} /> 加载中...
                  </div>
-              ) : isEditing ? (
-                <RichEditor 
-                  content={editedContent} 
-                  onChange={setEditedContent} 
-                />
               ) : (
-                <div className="p-8 prose dark:prose-invert max-w-none">
-                  <pre className="whitespace-pre-wrap font-sans text-base leading-relaxed">
-                    {selectedFile.content}
-                  </pre>
-                </div>
+                <RichEditor 
+                  ref={editorRef}
+                  content={editedContent} 
+                  onChange={setEditedContent}
+                  onHeadingsUpdate={setTocItems}
+                />
               )
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-gray-400">
