@@ -13,6 +13,11 @@ const DailyCard = ({ note, onUpdate }) => {
   const dayOfWeek = date.toLocaleDateString('zh-CN', { weekday: 'long' });
   const isToday = new Date().toDateString() === date.toDateString();
 
+  // Sync content when note updates (e.g. from quick input)
+  React.useEffect(() => {
+    setContent(note.content || '');
+  }, [note.content]);
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
