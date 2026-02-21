@@ -3,16 +3,81 @@ import {
   X,
   BookOpen,
   ChevronRight,
+  ChevronDown,
   Folder,
   FileText,
   Menu,
-  Calendar
+  Calendar,
+  FilePlus,
+  FolderPlus,
+  Trash2,
+  MoreVertical,
+  Plus
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { getRepoContent, getFileContent, putFile } from './GitHubService';
+import { getRepoContent, getFileContent, putFile, deleteFile, deleteDirectory, createDirectory } from './GitHubService';
 import DailyFlow from './components/DailyFlow/DailyFlow';
 import RichEditor from './components/RichEditor';
-import { ConfirmModal, InputModal } from './components/Modals'; // Assuming these still exist or need to be recreated if deleted
+import { ConfirmModal, InputModal } from './components/Modals';
+
+// Simple FileTree Component
+const FileTree = ({ items, level = 0, onSelect, onLoadChildren, onDelete, selectedPath }) => {
+  const [expanded, setExpanded] = useState({});
+
+  const toggle = async (item) => {
+    const isExpanding = !expanded[item.path];
+    setExpanded(prev => ({ ...prev, [item.path]: isExpanding }));
+    
+    if (isExpanding && item.children && item.children.length === 0 && onLoadChildren) {
+      await onLoadChildren(item);
+    }
+  };
+
+  if (!items) return null;
+
+  return (
+    <div className="text-sm">
+      {items.map((item) => (
+        <div key={item.path} className="group relative">
+          <div 
+            className={`flex items-center py-1.5 px-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer ${level > 0 ? 'ml-4' : ''} ${selectedPath === item.path ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600' : 'text-gray-700 dark:text-gray-300'}`}
+            onClick={() => item.type === 'folder' ? toggle(item) : onSelect(item)}
+          >
+            <span className="mr-1 text-gray-400 w-4 flex justify-center">
+              {item.type === 'folder' && (
+                expanded[item.path] ? <ChevronDown size={14} /> : <ChevronRight size={14} />
+              )}
+            </span>
+            <span className="mr-2 text-blue-500">
+              {item.type === 'folder' ? <Folder size={16} /> : <FileText size={16} />}
+            </span>
+            <span className="truncate flex-1">{item.name}</span>
+            
+            {/* Delete Button (visible on hover) */}
+            <button 
+              className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-opacity"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(item);
+              }}
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+          {item.type === 'folder' && expanded[item.path] && (
+            item.children && item.children.length > 0 ? (
+              <FileTree items={item.children} level={level + 1} onSelect={onSelect} onLoadChildren={onLoadChildren} onDelete={onDelete} selectedPath={selectedPath} />
+            ) : (
+              <div className={`text-xs text-gray-400 py-1 ${level > 0 ? 'ml-10' : 'ml-8'}`}>
+                (Empty)
+              </div>
+            )
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
 
 // Toast Notification Component
 const Toast = ({ message, type, onClose }) => {
@@ -53,6 +118,9 @@ const KnowledgeBase = () => {
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   const [inputModal, setInputModal] = useState({ isOpen: false, title: '', message: '', placeholder: '', onConfirm: () => {} });
 
+  const [toast, setToast] = useState(null);
+  const [loadError, setLoadError] = useState(null);
+
   useEffect(() => {
     const token = import.meta.env.VITE_GITHUB_TOKEN;
     const owner = import.meta.env.VITE_REPO_OWNER;
@@ -70,19 +138,105 @@ const KnowledgeBase = () => {
       return;
     }
     
-    // Load file system just for navigation (simplified)
-    const loadNav = async () => {
-        try {
-            const data = await getRepoContent('');
-            if (data) setFileSystem(data);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoading(false);
-        }
-    };
-    loadNav();
+    loadRoot();
   }, []);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+  };
+
+  const loadRoot = async () => {
+    setLoading(true);
+    try {
+        const data = await getRepoContent('');
+        if (data) setFileSystem(data);
+    } catch (e) {
+        console.error(e);
+        setLoadError(e.message);
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const handleLoadChildren = async (folder) => {
+    if (folder.children && folder.children.length > 0) return;
+
+    const children = await getRepoContent(folder.path);
+    if (children) {
+      const updateTree = (nodes) => {
+        return nodes.map(node => {
+          if (node.path === folder.path) {
+            return { ...node, children };
+          }
+          if (node.children) {
+            return { ...node, children: updateTree(node.children) };
+          }
+          return node;
+        });
+      };
+      setFileSystem(prev => updateTree(prev));
+    }
+  };
+
+  const handleDelete = (item) => {
+    setConfirmModal({
+      isOpen: true,
+      title: item.type === 'folder' ? '删除文件夹' : '删除文件',
+      message: item.type === 'folder' 
+        ? `确定要删除文件夹 "${item.name}" 及其所有内容吗？此操作不可恢复！`
+        : `确定要删除文件 "${item.name}" 吗？`,
+      onConfirm: async () => {
+        try {
+          if (item.type === 'folder') {
+            await deleteDirectory(item.path);
+            showToast('文件夹已删除', 'success');
+          } else {
+            await deleteFile(item.path, item.sha, `Delete ${item.name}`);
+            showToast('文件已删除', 'success');
+          }
+          
+          if (selectedFile && selectedFile.path.startsWith(item.path)) {
+            setSelectedFile(null);
+            setViewMode('daily'); // Reset to daily view if deleted
+          }
+          loadRoot();
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        } catch (error) {
+          showToast('删除失败: ' + error.message, 'error');
+        }
+      }
+    });
+  };
+
+  const handleCreateFile = () => {
+    setInputModal({
+      isOpen: true,
+      title: '新建文件或文件夹',
+      message: '输入文件名以 .md 结尾，或者输入文件夹名以 / 结尾',
+      placeholder: 'e.g., new-note.md or new-folder/',
+      onConfirm: async (filename) => {
+        if (!filename) return;
+        
+        try {
+          if (filename.endsWith('/')) {
+            await createDirectory(filename);
+            showToast('文件夹已创建', 'success');
+          } else {
+            if (!filename.endsWith('.md')) {
+              showToast('当前仅支持 .md 文件', 'error');
+              return;
+            }
+            await putFile(filename, '# New File\n', 'Create new file from web');
+            showToast('文件已创建', 'success');
+          }
+          loadRoot();
+          setInputModal(prev => ({ ...prev, isOpen: false }));
+        } catch (error) {
+          showToast('创建失败: ' + error.message, 'error');
+        }
+      }
+    });
+  };
 
   const handleSelectFile = async (file) => {
     if (file.type === 'folder') return;
@@ -163,7 +317,25 @@ const KnowledgeBase = () => {
 
   return (
     <div className="flex h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
+      {/* Modals */}
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen} 
+        title={confirmModal.title} 
+        message={confirmModal.message} 
+        onConfirm={confirmModal.onConfirm} 
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} 
+      />
+      <InputModal 
+        isOpen={inputModal.isOpen} 
+        title={inputModal.title} 
+        message={inputModal.message} 
+        placeholder={inputModal.placeholder}
+        onConfirm={inputModal.onConfirm} 
+        onCancel={() => setInputModal(prev => ({ ...prev, isOpen: false }))} 
+      />
+
       {/* Minimal Sidebar */}
       <div className="w-64 flex-shrink-0 border-r border-gray-200 dark:border-gray-800 flex flex-col bg-gray-50 dark:bg-gray-900/50">
         <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center">
@@ -182,27 +354,42 @@ const KnowledgeBase = () => {
                 </div>
             </div>
 
-            <div className="text-xs font-bold text-gray-400 uppercase px-2 mb-2">Folders</div>
+            <div className="text-xs font-bold text-gray-400 uppercase px-2 mb-2">Favorites</div>
             <div className="space-y-1">
-                {['Daily', 'Projectkickoff', 'todolist'].map(folder => (
-                    <div key={folder} className="flex items-center px-2 py-1.5 text-sm text-gray-600 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-800 cursor-pointer">
-                        <Folder size={14} className="mr-2 text-blue-500" />
-                        {folder}
-                    </div>
-                ))}
+                <div 
+                    className={`flex items-center px-2 py-1.5 text-sm rounded-md cursor-pointer ${selectedFile?.name === 'Projectkickoff.md' && viewMode === 'editor' ? 'bg-gray-200 dark:bg-gray-800' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800'}`}
+                    onClick={() => handleSelectFile({ name: 'Projectkickoff.md', path: 'Projectkickoff.md', type: 'file' })}
+                >
+                    <FileText size={14} className="mr-2 text-orange-500" />
+                    Projectkickoff
+                </div>
+                <div 
+                    className={`flex items-center px-2 py-1.5 text-sm rounded-md cursor-pointer ${selectedFile?.name === 'todolist.md' && viewMode === 'editor' ? 'bg-gray-200 dark:bg-gray-800' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800'}`}
+                    onClick={() => handleSelectFile({ name: 'todolist.md', path: 'todolist.md', type: 'file' })}
+                >
+                    <FileText size={14} className="mr-2 text-green-500" />
+                    todolist
+                </div>
             </div>
             
-            <div className="text-xs font-bold text-gray-400 uppercase px-2 mt-4 mb-2">Files</div>
-             {fileSystem.filter(i => i.type === 'file' && !i.name.startsWith('.')).map(file => (
-                 <div 
-                    key={file.path} 
-                    className={`flex items-center px-2 py-1.5 text-sm rounded-md cursor-pointer ${selectedFile?.path === file.path && viewMode === 'editor' ? 'bg-gray-200 dark:bg-gray-800' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800'}`}
-                    onClick={() => handleSelectFile(file)}
-                 >
-                     <FileText size={14} className="mr-2 text-gray-400" />
-                     <span className="truncate">{file.name}</span>
-                 </div>
-             ))}
+            <div className="flex items-center justify-between px-2 mt-6 mb-2">
+                <div className="text-xs font-bold text-gray-400 uppercase">All Files</div>
+                <button 
+                    onClick={handleCreateFile}
+                    className="p-1 text-gray-400 hover:text-blue-600 rounded-md transition-colors"
+                    title="New File/Folder"
+                >
+                    <Plus size={14} />
+                </button>
+            </div>
+            
+            <FileTree 
+                items={fileSystem} 
+                onSelect={handleSelectFile} 
+                onLoadChildren={handleLoadChildren} 
+                onDelete={handleDelete}
+                selectedPath={selectedFile?.path}
+            />
         </div>
 
         <div className="p-4 border-t border-gray-200 dark:border-gray-800">
