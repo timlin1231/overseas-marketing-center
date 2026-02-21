@@ -93,9 +93,9 @@ const MenuBar = ({ editor }) => {
         ) : (
           <button
             key={index}
+            onMouseDown={(e) => e.preventDefault()} // Prevent focus loss on click
             onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation(); // Double safety
+              e.stopPropagation();
               btn.action();
             }}
             title={btn.title}
