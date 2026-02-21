@@ -185,20 +185,16 @@ export const appendToDailyNote = async (content) => {
   
   let newContent = content;
   let sha = null;
+  const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
   
   if (currentNote) {
-    const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-    newContent = `${currentNote.content}\n\n- [${time}] ${content}`;
+    // 简洁追加: 空行 + 时间戳 + 内容
+    newContent = `${currentNote.content}\n\n**${time}** ${content}`;
     sha = currentNote.sha;
   } else {
-    newContent = `---
-date: ${today}
-type: daily-log
----
-
-# ${today} 日记
-
-- [${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}] ${content}`;
+    // 新建文件: 仅包含第一条记录，不再添加 Frontmatter 或 H1 标题
+    // 以保持内容极简
+    newContent = `**${time}** ${content}`;
   }
   
   // 确保目录存在

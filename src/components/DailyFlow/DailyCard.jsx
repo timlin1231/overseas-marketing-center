@@ -4,16 +4,16 @@ import { Calendar, ChevronDown, ChevronUp, Edit2, Save } from 'lucide-react';
 import { putFile } from '../../GitHubService';
 
 const DailyCard = ({ note, onUpdate }) => {
-  const [isExpanded, setIsExpanded] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
-  const [content, setContent] = useState(note.content || '');
-  const [isSaving, setIsSaving] = useState(false);
-
   const date = new Date(note.date);
   const dayOfWeek = date.toLocaleDateString('zh-CN', { weekday: 'long' });
   const isToday = new Date().toDateString() === date.toDateString();
 
-  // Sync content when note updates (e.g. from quick input)
+  const [isExpanded, setIsExpanded] = useState(isToday); // 仅今天默认展开
+  const [isEditing, setIsEditing] = useState(false);
+  const [content, setContent] = useState(note.content || '');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Sync content when note updates
   React.useEffect(() => {
     setContent(note.content || '');
   }, [note.content]);
@@ -21,24 +21,9 @@ const DailyCard = ({ note, onUpdate }) => {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // 如果是新文件，GitHubService 会处理创建逻辑，但这里如果是编辑现有卡片，我们直接 putFile
-      // 注意：这里的逻辑是全量覆盖，而不是追加。
-      // 追加逻辑只用于顶部的快速输入框。
-      // 卡片内的编辑应该是自由编辑。
-      
       let newContent = content;
-      // 确保新文件有 Frontmatter (如果内容为空且是新文件)
-      if (note.isNew && !content.startsWith('---')) {
-         newContent = `---
-date: ${note.date}
-type: daily-log
----
-
-# ${note.date} 日记
-
-${content}`;
-      }
-
+      // 保持内容极简，不再自动添加 Frontmatter 或 H1
+      
       const result = await putFile(
         note.path,
         newContent,
@@ -58,32 +43,34 @@ ${content}`;
     }
   };
 
+  // 简单的内容预处理：如果内容包含 Frontmatter，我们在展示时隐藏它
+  // 这里做一个简单的处理，实际可能需要更复杂的解析
+  // 但既然我们不再写入 Frontmatter，这里主要处理旧数据
+  const displayContent = content.replace(/^---\n[\s\S]*?---\n/, '').replace(/^# .*\n/, '').trim();
+
   return (
-    <div className={`mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 transition-all duration-200 ${isToday ? 'ring-2 ring-blue-100 dark:ring-blue-900' : ''}`}>
+    <div className={`mb-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 transition-all duration-200 ${isToday ? 'ring-1 ring-blue-500/30' : ''}`}>
       {/* Card Header */}
       <div 
-        className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-t-xl"
+        className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-t-xl group"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center space-x-3">
-          <div className={`p-2 rounded-lg ${isToday ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+          <div className={`p-2 rounded-lg ${isToday ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
             <Calendar size={20} />
           </div>
           <div>
             <div className="flex items-center">
-              <span className="font-bold text-gray-800 dark:text-gray-100 mr-2">{note.date}</span>
-              <span className="text-xs text-gray-500 font-medium px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full">
+              <span className="text-lg font-bold text-gray-800 dark:text-gray-100 mr-2">{note.date}</span>
+              <span className="text-xs text-gray-500 font-medium mr-2">
                 {dayOfWeek}
               </span>
-              {isToday && <span className="ml-2 text-xs text-blue-600 font-bold">Today</span>}
-            </div>
-            <div className="text-xs text-gray-400 mt-0.5">
-              {content.length} 字
+              {isToday && <span className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold">Today</span>}
             </div>
           </div>
         </div>
         
-        <div className="flex items-center space-x-2" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
           {isExpanded && (
             isEditing ? (
               <>
@@ -111,7 +98,7 @@ ${content}`;
               </button>
             )
           )}
-          <button className="text-gray-400">
+          <button className="text-gray-400 hover:text-gray-600">
             {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
           </button>
         </div>
@@ -119,19 +106,20 @@ ${content}`;
 
       {/* Card Content */}
       {isExpanded && (
-        <div className="p-4 border-t border-gray-100 dark:border-gray-700 min-h-screen">
+        <div className="p-4 pt-0 border-t-0 min-h-[100px]" onClick={() => !isEditing && setIsEditing(true)}>
           {isEditing ? (
-            <div className="h-full min-h-screen">
+            <div className="min-h-[200px]">
                <RichEditor 
                   content={content} 
                   onChange={setContent} 
                />
             </div>
           ) : (
-            <div className="prose dark:prose-invert max-w-none text-sm text-gray-600 dark:text-gray-300">
-              {/* 这里简单展示 Markdown 内容，实际可以使用 RichEditor 的只读模式 */}
+            <div className="prose dark:prose-invert max-w-none text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+               {/* 展示处理后的内容，或者直接展示原内容（RichEditor 会解析 Markdown） */}
+               {/* 为了保持格式一致，我们还是用 RichEditor 只读模式，但它会渲染 Markdown */}
                <RichEditor 
-                  content={content} 
+                  content={content} // 如果想隐藏 Frontmatter，可以用 displayContent，但编辑时需要原内容
                   editable={false}
                />
             </div>
