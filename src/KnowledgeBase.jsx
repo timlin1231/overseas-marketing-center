@@ -12,7 +12,11 @@ import {
   FolderPlus,
   Trash2,
   MoreVertical,
-  Plus
+  Plus,
+  Loader,
+  CheckSquare,
+  Square,
+  Settings
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getRepoContent, getFileContent, putFile, deleteFile, deleteDirectory, createDirectory } from './GitHubService';
@@ -21,7 +25,7 @@ import RichEditor from './components/RichEditor';
 import { ConfirmModal, InputModal } from './components/Modals';
 
 // Simple FileTree Component
-const FileTree = ({ items, level = 0, onSelect, onLoadChildren, onDelete, selectedPath }) => {
+const FileTree = ({ items, level = 0, onSelect, onLoadChildren, onDelete, selectedPath, multiSelect, selectedItems, onToggleSelect }) => {
   const [expanded, setExpanded] = useState({});
 
   const toggle = async (item) => {
@@ -41,13 +45,31 @@ const FileTree = ({ items, level = 0, onSelect, onLoadChildren, onDelete, select
         <div key={item.path} className="group relative">
           <div 
             className={`flex items-center py-1.5 px-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer ${level > 0 ? 'ml-4' : ''} ${selectedPath === item.path ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600' : 'text-gray-700 dark:text-gray-300'}`}
-            onClick={() => item.type === 'folder' ? toggle(item) : onSelect(item)}
+            onClick={() => {
+              if (multiSelect) {
+                onToggleSelect(item);
+                return;
+              }
+              item.type === 'folder' ? toggle(item) : onSelect(item);
+            }}
           >
-            <span className="mr-1 text-gray-400 w-4 flex justify-center">
-              {item.type === 'folder' && (
+            <button
+              className="mr-1 text-gray-400 w-4 flex justify-center"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (item.type === 'folder') toggle(item);
+              }}
+              type="button"
+            >
+              {item.type === 'folder' ? (
                 expanded[item.path] ? <ChevronDown size={14} /> : <ChevronRight size={14} />
-              )}
-            </span>
+              ) : null}
+            </button>
+            {multiSelect && (
+              <span className="mr-2 text-gray-400">
+                {selectedItems?.[item.path] ? <CheckSquare size={16} /> : <Square size={16} />}
+              </span>
+            )}
             <span className="mr-2 text-blue-500">
               {item.type === 'folder' ? <Folder size={16} /> : <FileText size={16} />}
             </span>
@@ -55,7 +77,7 @@ const FileTree = ({ items, level = 0, onSelect, onLoadChildren, onDelete, select
             
             {/* Delete Button (visible on hover) */}
             <button 
-              className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-opacity"
+              className={`p-1 text-gray-400 hover:text-red-500 transition-opacity ${multiSelect ? 'opacity-0 pointer-events-none' : 'opacity-0 group-hover:opacity-100'}`}
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete(item);
@@ -66,7 +88,7 @@ const FileTree = ({ items, level = 0, onSelect, onLoadChildren, onDelete, select
           </div>
           {item.type === 'folder' && expanded[item.path] && (
             item.children && item.children.length > 0 ? (
-              <FileTree items={item.children} level={level + 1} onSelect={onSelect} onLoadChildren={onLoadChildren} onDelete={onDelete} selectedPath={selectedPath} />
+              <FileTree items={item.children} level={level + 1} onSelect={onSelect} onLoadChildren={onLoadChildren} onDelete={onDelete} selectedPath={selectedPath} multiSelect={multiSelect} selectedItems={selectedItems} onToggleSelect={onToggleSelect} />
             ) : (
               <div className={`text-xs text-gray-400 py-1 ${level > 0 ? 'ml-10' : 'ml-8'}`}>
                 (Empty)
@@ -120,6 +142,9 @@ const KnowledgeBase = () => {
 
   const [toast, setToast] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  const [manageOpen, setManageOpen] = useState(false);
+  const [multiSelect, setMultiSelect] = useState(false);
+  const [selectedItems, setSelectedItems] = useState({});
 
   useEffect(() => {
     const token = import.meta.env.VITE_GITHUB_TOKEN;
@@ -208,6 +233,36 @@ const KnowledgeBase = () => {
     });
   };
 
+  const handleBulkDelete = async () => {
+    const items = Object.values(selectedItems);
+    if (items.length === 0) return;
+
+    setConfirmModal({
+      isOpen: true,
+      title: '批量删除',
+      message: `确定要删除已选中的 ${items.length} 项吗？此操作不可恢复！`,
+      onConfirm: async () => {
+        try {
+          for (const it of items) {
+            if (it.type === 'folder') {
+              await deleteDirectory(it.path);
+            } else {
+              await deleteFile(it.path, it.sha, `Delete ${it.name}`);
+            }
+          }
+          setSelectedItems({});
+          setMultiSelect(false);
+          await loadRoot();
+          showToast('批量删除完成', 'success');
+        } catch (error) {
+          showToast('批量删除失败: ' + error.message, 'error');
+        } finally {
+          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        }
+      }
+    });
+  };
+
   const handleCreateFile = () => {
     setInputModal({
       isOpen: true,
@@ -245,15 +300,23 @@ const KnowledgeBase = () => {
     setSelectedFile({ ...file, content: 'Loading...' });
     setFileContentLoading(true);
     setTocItems([]);
-    
-    const result = await getFileContent(file.path);
-    if (result) {
-      setSelectedFile({ ...file, content: result.content, sha: result.sha });
-      setEditedContent(result.content);
-    } else {
+
+    try {
+      const result = await getFileContent(file.path);
+      if (result) {
+        setSelectedFile({ ...file, content: result.content, sha: result.sha });
+        setEditedContent(result.content);
+      } else {
+        setSelectedFile({ ...file, content: 'Failed to load content.' });
+        showToast('打开失败：文件不存在或无权限', 'error');
+      }
+    } catch (e) {
+      console.error(e);
       setSelectedFile({ ...file, content: 'Failed to load content.' });
+      showToast('打开失败：' + (e?.message || '未知错误'), 'error');
+    } finally {
+      setFileContentLoading(false);
     }
-    setFileContentLoading(false);
   };
 
   const handleSaveEdit = async (silent = false) => {
@@ -344,52 +407,100 @@ const KnowledgeBase = () => {
         </div>
         
         <div className="flex-1 overflow-y-auto p-2">
-            <div className="space-y-1 mb-4">
-                <div 
-                    className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer ${viewMode === 'daily' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-                    onClick={() => setViewMode('daily')}
-                >
-                    <Calendar size={16} className="mr-2" />
-                    Daily Flow
-                </div>
+          <div className="text-xs font-bold text-gray-400 uppercase px-2 mb-2">Files</div>
+          <div className="space-y-1">
+            <div
+              className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer ${viewMode === 'daily' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+              onClick={() => {
+                setViewMode('daily');
+                setSelectedFile(null);
+              }}
+            >
+              <Calendar size={16} className="mr-2" />
+              Daily
             </div>
 
-            <div className="text-xs font-bold text-gray-400 uppercase px-2 mb-2">Favorites</div>
-            <div className="space-y-1">
-                <div 
-                    className={`flex items-center px-2 py-1.5 text-sm rounded-md cursor-pointer ${selectedFile?.name === 'Projectkickoff.md' && viewMode === 'editor' ? 'bg-gray-200 dark:bg-gray-800' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800'}`}
-                    onClick={() => handleSelectFile({ name: 'Projectkickoff.md', path: 'Projectkickoff.md', type: 'file' })}
-                >
-                    <FileText size={14} className="mr-2 text-orange-500" />
-                    Projectkickoff
-                </div>
-                <div 
-                    className={`flex items-center px-2 py-1.5 text-sm rounded-md cursor-pointer ${selectedFile?.name === 'todolist.md' && viewMode === 'editor' ? 'bg-gray-200 dark:bg-gray-800' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800'}`}
-                    onClick={() => handleSelectFile({ name: 'todolist.md', path: 'todolist.md', type: 'file' })}
-                >
-                    <FileText size={14} className="mr-2 text-green-500" />
-                    todolist
-                </div>
+            <div
+              className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer ${selectedFile?.path === 'Projectkickoff.md' && viewMode === 'editor' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+              onClick={() => handleSelectFile({ name: 'Projectkickoff.md', path: 'Projectkickoff.md', type: 'file' })}
+            >
+              <FileText size={16} className="mr-2 text-orange-500" />
+              Projectkickoff
             </div>
-            
-            <div className="flex items-center justify-between px-2 mt-6 mb-2">
-                <div className="text-xs font-bold text-gray-400 uppercase">All Files</div>
-                <button 
+
+            <div
+              className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer ${selectedFile?.path === 'todolist.md' && viewMode === 'editor' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+              onClick={() => handleSelectFile({ name: 'todolist.md', path: 'todolist.md', type: 'file' })}
+            >
+              <FileText size={16} className="mr-2 text-green-500" />
+              todolist
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <button
+              className="w-full flex items-center justify-between px-2 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md"
+              onClick={() => setManageOpen(v => !v)}
+            >
+              <span className="flex items-center">
+                <Settings size={16} className="mr-2 text-gray-400" />
+                文件管理
+              </span>
+              {manageOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+            </button>
+
+            {manageOpen && (
+              <div className="mt-2 px-2">
+                <div className="flex items-center justify-between mb-2">
+                  <button
                     onClick={handleCreateFile}
-                    className="p-1 text-gray-400 hover:text-blue-600 rounded-md transition-colors"
-                    title="New File/Folder"
-                >
-                    <Plus size={14} />
-                </button>
-            </div>
-            
-            <FileTree 
-                items={fileSystem} 
-                onSelect={handleSelectFile} 
-                onLoadChildren={handleLoadChildren} 
-                onDelete={handleDelete}
-                selectedPath={selectedFile?.path}
-            />
+                    className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+                  >
+                    新建
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setMultiSelect(v => !v);
+                        setSelectedItems({});
+                      }}
+                      className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700"
+                    >
+                      {multiSelect ? '退出选择' : '批量选择'}
+                    </button>
+                    <button
+                      onClick={handleBulkDelete}
+                      disabled={!multiSelect || Object.keys(selectedItems).length === 0}
+                      className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      删除
+                    </button>
+                  </div>
+                </div>
+
+                <FileTree
+                  items={fileSystem}
+                  onSelect={handleSelectFile}
+                  onLoadChildren={handleLoadChildren}
+                  onDelete={handleDelete}
+                  selectedPath={selectedFile?.path}
+                  multiSelect={multiSelect}
+                  selectedItems={selectedItems}
+                  onToggleSelect={(item) => {
+                    setSelectedItems(prev => {
+                      const next = { ...prev };
+                      if (next[item.path]) {
+                        delete next[item.path];
+                        return next;
+                      }
+                      next[item.path] = item;
+                      return next;
+                    });
+                  }}
+                />
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="p-4 border-t border-gray-200 dark:border-gray-800">
