@@ -1,10 +1,12 @@
 import React, { useEffect } from 'react';
-import { useEditor, EditorContent, BubbleMenu, FloatingMenu } from '@tiptap/react';
+import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { common, createLowlight } from 'lowlight';
+import { Markdown } from 'tiptap-markdown';
+import { marked } from 'marked';
 import classNames from 'classnames';
 import { 
   Bold, Italic, Strikethrough, Code, 
@@ -116,60 +118,26 @@ const RichEditor = ({ content, onChange, editable = true }) => {
       CodeBlockLowlight.configure({
         lowlight,
       }),
+      Markdown,
     ],
-    content: content,
+    content: marked(content || ''), // Initial content: Markdown -> HTML
     editable: editable,
     onUpdate: ({ editor }) => {
-      // In a real app, you might want to debounce this or convert to Markdown
-      // For now, we'll just pass the HTML content back
-      // If the backend expects Markdown, we need a serializer. 
-      // For simplicity in this step, let's assume we are saving plain text/markdown 
-      // by just extracting text or using a markdown serializer library.
-      // But wait, the previous implementation used plain text. 
-      // If we switch to Tiptap, we should ideally store JSON or HTML, or convert to Markdown.
-      // Since Obsidian uses Markdown, we MUST convert HTML to Markdown.
-      // For this MVP, let's use a simple text extraction or keep it as is if the user is ok with it.
-      // ACTUALLY: The requirement is to edit Markdown files. Tiptap doesn't output Markdown by default.
-      // We need a serializer. But installing `tiptap-markdown` might be complex.
-      // Let's use `editor.getText()` for now to keep it simple and safe for Obsidian, 
-      // but `getText()` loses formatting. 
-      // Let's try to do a basic HTML-to-Markdown or just pass the text if it's simple.
-      // BETTER: For now, let's just pass `editor.getHTML()` and assume we might save HTML.
-      // WAIT, Obsidian won't like HTML files renamed as .md.
-      // Okay, critical path: We need to output Markdown.
-      // Since I cannot easily install complex new packages without risk, 
-      // I will assume for this step we are just enabling the UI. 
-      // I will create a simple HTML->Markdown converter or just use `turndown` if available? No.
-      // Let's stick to passing `editor.storage.markdown.getMarkdown()` if we had the extension.
-      // Since we don't, I will use a placeholder behavior: 
-      // If the user types in Tiptap, we'll save the *text* content for now, 
-      // or simplistic structure.
-      
-      // RE-EVALUATION: To support "Markdown editing", maybe we should just use a 
-      // Markdown-friendly editor or ensure Tiptap can serialize to MD.
-      // Let's assume for this MVP we just pass text content to avoid breaking the file format.
-      // Or better: Let's use `editor.getText()` combined with basic structure.
-      // NO, that defeats the purpose of Rich Text.
-      
-      // Let's use a specialized Markdown serializer for Tiptap later.
-      // For this specific turn, I will output `editor.getHTML()` but this is dangerous for .md files.
-      // Actually, let's try to be smart. If the file is .md, we really want Markdown.
-      // I will add a basic custom serializer or just use `editor.getText()` as a fallback
-      // to ensure we don't corrupt the user's notes with raw HTML tags.
-      
-      onChange(editor.getHTML()); 
+      // Save as Markdown
+      onChange(editor.storage.markdown.getMarkdown());
     },
   });
 
   // Update content if it changes externally (e.g. selecting a different file)
   useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
-      // Only update if content is significantly different to avoid cursor jumps
-      // For simplicity, we just setContent on file switch
-      // But this might cause loops if not careful.
-      // We'll handle this in the parent component.
-      // Actually, Tiptap's setContent is safe to call if we check equality or rely on parent key.
-      editor.commands.setContent(content);
+    if (editor && content) {
+      // Check if current editor content matches the new content (to avoid loop/cursor jump)
+      // Since we convert MD <-> HTML, exact string match is hard.
+      // We rely on the parent to only update `content` when switching files.
+      // Or we can check if the editor is focused.
+      if (!editor.isFocused) {
+         editor.commands.setContent(marked(content));
+      }
     }
   }, [content, editor]);
 
