@@ -83,7 +83,7 @@ const MenuBar = ({ editor }) => {
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-1 p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+    <div className="flex flex-wrap items-center gap-1 p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 sticky top-0 z-10">
       {buttons.map((btn, index) => (
         btn.type === 'divider' ? (
           <div key={index} className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1" />
@@ -124,7 +124,9 @@ const RichEditor = forwardRef(({ content, onChange, onHeadingsUpdate, editable =
     editable: editable,
     onUpdate: ({ editor }) => {
       // Save as Markdown
-      onChange(editor.storage.markdown.getMarkdown());
+      if (onChange) {
+        onChange(editor.storage.markdown.getMarkdown());
+      }
       
       // Update headings for TOC
       if (onHeadingsUpdate) {
@@ -155,9 +157,13 @@ const RichEditor = forwardRef(({ content, onChange, onHeadingsUpdate, editable =
 
   // Update content if it changes externally (e.g. selecting a different file)
   useEffect(() => {
-    if (editor && content) {
+    if (editor && content !== undefined) {
+      // Check if current editor content matches the new content (to avoid loop/cursor jump)
+      // Since we convert MD <-> HTML, exact string match is hard.
+      // We rely on the parent to only update `content` when switching files.
+      // Or we can check if the editor is focused.
       if (!editor.isFocused) {
-         editor.commands.setContent(marked(content));
+         editor.commands.setContent(marked(content || ''));
          
          // Also update headings initially
          const headings = [];
