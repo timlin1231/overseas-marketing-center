@@ -245,7 +245,12 @@ export const createDirectory = async (path) => {
     // 移除末尾的斜杠
     const cleanPath = path.endsWith('/') ? path.slice(0, -1) : path;
     const gitkeepPath = `${cleanPath}/.gitkeep`;
-    
+
+    const existing = await getFileContent(gitkeepPath);
+    if (existing && existing.sha) {
+      return true;
+    }
+
     await putFile(gitkeepPath, '', `Create directory ${cleanPath}`);
     return true;
   } catch (error) {

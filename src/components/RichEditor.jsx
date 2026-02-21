@@ -116,48 +116,7 @@ const RichEditor = forwardRef(({ content, onChange, onHeadingsUpdate, editable =
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        codeBlock: false, // We use the lowlight extension instead
-        heading: {
-          HTMLAttributes: {
-            class: 'font-bold text-gray-900 dark:text-gray-100', // Base styles
-          },
-          levels: [1, 2, 3],
-        },
-        bulletList: {
-          HTMLAttributes: {
-            class: 'list-disc list-outside ml-4',
-          },
-        },
-        orderedList: {
-          HTMLAttributes: {
-            class: 'list-decimal list-outside ml-4',
-          },
-        },
-        blockquote: {
-          HTMLAttributes: {
-            class: 'border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic',
-          },
-        },
-      }).extend({
-        // Override styles for specific levels
-        addAttributes() {
-            return {
-                ...this.parent?.(),
-                level: {
-                    default: 1,
-                    renderHTML: attributes => {
-                        const classes = {
-                            1: 'text-3xl mb-4 mt-2',
-                            2: 'text-2xl mb-3 mt-2',
-                            3: 'text-xl mb-2 mt-1',
-                        }
-                        return {
-                            class: classes[attributes.level],
-                        }
-                    },
-                },
-            }
-        }
+        codeBlock: false,
       }),
       Image,
       Link.configure({
@@ -170,7 +129,6 @@ const RichEditor = forwardRef(({ content, onChange, onHeadingsUpdate, editable =
     ],
     content: marked(content || ''), // Initial content: Markdown -> HTML
     editable: editable,
-    autofocus: 'end', // Auto-focus at the end
     onUpdate: ({ editor }) => {
       // Save as Markdown
       if (onChange) {
@@ -207,18 +165,9 @@ const RichEditor = forwardRef(({ content, onChange, onHeadingsUpdate, editable =
   // Update content if it changes externally (e.g. selecting a different file)
   useEffect(() => {
     if (editor && content !== undefined) {
-      // Check if current editor content matches the new content (to avoid loop/cursor jump)
-      // Since we convert MD <-> HTML, exact string match is hard.
-      // We rely on the parent to only update `content` when switching files.
-      // Or we can check if the editor is focused.
       if (!editor.isFocused) {
          editor.commands.setContent(marked(content || ''));
-         
-         // If editable changed to true, focus!
-         if (editable) {
-             editor.commands.focus('end');
-         }
-         
+
          // Also update headings initially
          const headings = [];
          editor.state.doc.descendants((node, pos) => {
@@ -237,10 +186,16 @@ const RichEditor = forwardRef(({ content, onChange, onHeadingsUpdate, editable =
     }
   }, [content, editor]);
 
+  useEffect(() => {
+    if (editor && editable) {
+      editor.commands.focus('end');
+    }
+  }, [editor, editable]);
+
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-900">
       {editable && <MenuBar editor={editor} />}
-      <EditorContent editor={editor} className="flex-1 overflow-y-auto prose dark:prose-invert max-w-none p-4 focus:outline-none" />
+      <EditorContent editor={editor} className="flex-1 overflow-y-auto tiptap p-4 focus:outline-none" />
     </div>
   );
 });

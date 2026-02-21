@@ -1,7 +1,17 @@
 import React, { useState } from 'react';
 import RichEditor from '../RichEditor';
 import { Calendar, ChevronDown, ChevronUp, Edit2, Save } from 'lucide-react';
-import { putFile } from '../../GitHubService';
+import { getFileContent, putFile } from '../../GitHubService';
+
+const sanitizeDailyContent = (raw, dateStr) => {
+  let text = raw || '';
+  text = text.replace(/^---\n[\s\S]*?\n---\n*/g, '');
+  text = text.replace(new RegExp(`^date:\\s*${dateStr}.*\\n`, 'm'), '');
+  text = text.replace(/^date:\s*\d{4}-\d{2}-\d{2}.*\n/m, '');
+  text = text.replace(/^#\s*\d{4}-\d{2}-\d{2}.*日记.*\n/m, '');
+  text = text.replace(new RegExp(`^#\\s*${dateStr}.*\\n`, 'm'), '');
+  return text.trim();
+};
 
 const DailyCard = ({ note, onUpdate }) => {
   const date = new Date(note.date);
@@ -10,33 +20,34 @@ const DailyCard = ({ note, onUpdate }) => {
 
   const [isExpanded, setIsExpanded] = useState(isToday); // 仅今天默认展开
   const [isEditing, setIsEditing] = useState(false);
-  const [content, setContent] = useState(note.content || '');
+  const [content, setContent] = useState(sanitizeDailyContent(note.content || '', note.date));
   const [isSaving, setIsSaving] = useState(false);
 
-  // Sync content when note updates
   React.useEffect(() => {
-    // Only update content if not currently editing to avoid overwriting user input
     if (!isEditing) {
-        setContent(note.content || '');
+      setContent(sanitizeDailyContent(note.content || '', note.date));
     }
-  }, [note.content, isEditing]);
+  }, [note.content, note.date, isEditing]);
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      let newContent = content;
-      // 保持内容极简，不再自动添加 Frontmatter 或 H1
-      
+      const newContent = sanitizeDailyContent(content, note.date);
+
+      const latest = await getFileContent(note.path);
+      const shaToUse = latest?.sha || note.sha;
+
       const result = await putFile(
         note.path,
         newContent,
         `Update daily note ${note.date}`,
-        note.sha
+        shaToUse
       );
       
       if (onUpdate) {
         onUpdate({ ...note, content: newContent, sha: result.content.sha, isNew: false });
       }
+      setContent(newContent);
       setIsEditing(false);
     } catch (error) {
       console.error('Save failed:', error);
@@ -45,11 +56,6 @@ const DailyCard = ({ note, onUpdate }) => {
       setIsSaving(false);
     }
   };
-
-  // 简单的内容预处理：如果内容包含 Frontmatter，我们在展示时隐藏它
-  // 这里做一个简单的处理，实际可能需要更复杂的解析
-  // 但既然我们不再写入 Frontmatter，这里主要处理旧数据
-  const displayContent = content.replace(/^---\n[\s\S]*?---\n/, '').replace(/^# .*\n/, '').trim();
 
   return (
     <div className={`mb-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 transition-all duration-200 ${isToday ? 'ring-1 ring-blue-500/30' : ''}`}>
@@ -122,11 +128,9 @@ const DailyCard = ({ note, onUpdate }) => {
                />
             </div>
           ) : (
-            <div className="prose dark:prose-invert max-w-none text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-               {/* 展示处理后的内容，或者直接展示原内容（RichEditor 会解析 Markdown） */}
-               {/* 为了保持格式一致，我们还是用 RichEditor 只读模式，但它会渲染 Markdown */}
+            <div className="max-w-none text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
                <RichEditor 
-                  content={content} // 如果想隐藏 Frontmatter，可以用 displayContent，但编辑时需要原内容
+                  content={content}
                   editable={false}
                />
             </div>
