@@ -136,7 +136,7 @@ export const deleteFile = async (path, sha, message) => {
 // 获取指定日期的笔记 (如果不存在则返回空)
 export const getDailyNote = async (dateStr) => {
   // dateStr 格式: YYYY-MM-DD
-  const path = `00_Inbox/${dateStr}.md`;
+  const path = `Daily/${dateStr}.md`;
   try {
     const file = await getFileContent(path);
     return file ? { ...file, date: dateStr } : null;
@@ -156,13 +156,10 @@ export const getRecentDailyNotes = async (days = 7) => {
     date.setDate(today.getDate() - i);
     const dateStr = date.toISOString().split('T')[0];
     
-    // 并行请求以提高速度 (注意 GitHub API 速率限制)
-    // 实际生产中可能需要优化，但对于个人使用 7 次请求问题不大
     notes.push(getDailyNote(dateStr));
   }
   
   const results = await Promise.all(notes);
-  // 过滤掉 null，或者保留 null 以便显示空卡片（取决于需求，这里保留结构以便前端知道是哪天）
   return results.map((note, index) => {
     const date = new Date(today);
     date.setDate(today.getDate() - index);
@@ -170,7 +167,7 @@ export const getRecentDailyNotes = async (days = 7) => {
     
     return note || { 
       name: `${dateStr}.md`, 
-      path: `00_Inbox/${dateStr}.md`, 
+      path: `Daily/${dateStr}.md`, 
       content: '', 
       sha: null,
       date: dateStr,
@@ -182,7 +179,7 @@ export const getRecentDailyNotes = async (days = 7) => {
 // 追加内容到今日笔记
 export const appendToDailyNote = async (content) => {
   const today = new Date().toISOString().split('T')[0];
-  const path = `00_Inbox/${today}.md`;
+  const path = `Daily/${today}.md`;
   
   const currentNote = await getDailyNote(today);
   
@@ -190,13 +187,10 @@ export const appendToDailyNote = async (content) => {
   let sha = null;
   
   if (currentNote) {
-    // 如果已有内容，追加在后面 (双换行)
-    // 可以添加时间戳
     const time = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
     newContent = `${currentNote.content}\n\n- [${time}] ${content}`;
     sha = currentNote.sha;
   } else {
-    // 新建文件，添加 Frontmatter
     newContent = `---
 date: ${today}
 type: daily-log
@@ -206,6 +200,9 @@ type: daily-log
 
 - [${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}] ${content}`;
   }
+  
+  // 确保目录存在
+  await createDirectory('Daily/');
   
   return putFile(path, newContent, `Update daily note ${today}`, sha);
 };

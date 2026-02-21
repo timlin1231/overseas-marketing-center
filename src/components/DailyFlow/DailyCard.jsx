@@ -114,9 +114,9 @@ ${content}`;
 
       {/* Card Content */}
       {isExpanded && (
-        <div className="p-4 border-t border-gray-100 dark:border-gray-700 min-h-[150px]">
+        <div className="p-4 border-t border-gray-100 dark:border-gray-700 min-h-screen">
           {isEditing ? (
-            <div className="h-full">
+            <div className="h-full min-h-screen">
                <RichEditor 
                   content={content} 
                   onChange={setContent} 
