@@ -15,8 +15,11 @@ const DailyCard = ({ note, onUpdate }) => {
 
   // Sync content when note updates
   React.useEffect(() => {
-    setContent(note.content || '');
-  }, [note.content]);
+    // Only update content if not currently editing to avoid overwriting user input
+    if (!isEditing) {
+        setContent(note.content || '');
+    }
+  }, [note.content, isEditing]);
 
   const handleSave = async () => {
     setIsSaving(true);

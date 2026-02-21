@@ -122,7 +122,8 @@ const KnowledgeBase = () => {
 
   // Auto-save for editor
   useEffect(() => {
-    if (viewMode !== 'editor' || !selectedFile || editedContent === selectedFile.content) return;
+    // Only auto-save if in editor mode, file is selected, content changed, and not currently loading
+    if (viewMode !== 'editor' || !selectedFile || editedContent === selectedFile.content || fileContentLoading) return;
 
     const timer = setTimeout(async () => {
       setAutoSaving(true);
@@ -131,7 +132,7 @@ const KnowledgeBase = () => {
     }, 3000);
 
     return () => clearTimeout(timer);
-  }, [editedContent, viewMode, selectedFile]);
+  }, [editedContent, viewMode, selectedFile, fileContentLoading]);
 
   if (configError) {
     return (
