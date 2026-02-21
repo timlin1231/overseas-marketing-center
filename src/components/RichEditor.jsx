@@ -117,6 +117,47 @@ const RichEditor = forwardRef(({ content, onChange, onHeadingsUpdate, editable =
     extensions: [
       StarterKit.configure({
         codeBlock: false, // We use the lowlight extension instead
+        heading: {
+          HTMLAttributes: {
+            class: 'font-bold text-gray-900 dark:text-gray-100', // Base styles
+          },
+          levels: [1, 2, 3],
+        },
+        bulletList: {
+          HTMLAttributes: {
+            class: 'list-disc list-outside ml-4',
+          },
+        },
+        orderedList: {
+          HTMLAttributes: {
+            class: 'list-decimal list-outside ml-4',
+          },
+        },
+        blockquote: {
+          HTMLAttributes: {
+            class: 'border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic',
+          },
+        },
+      }).extend({
+        // Override styles for specific levels
+        addAttributes() {
+            return {
+                ...this.parent?.(),
+                level: {
+                    default: 1,
+                    renderHTML: attributes => {
+                        const classes = {
+                            1: 'text-3xl mb-4 mt-2',
+                            2: 'text-2xl mb-3 mt-2',
+                            3: 'text-xl mb-2 mt-1',
+                        }
+                        return {
+                            class: classes[attributes.level],
+                        }
+                    },
+                },
+            }
+        }
       }),
       Image,
       Link.configure({
@@ -129,6 +170,7 @@ const RichEditor = forwardRef(({ content, onChange, onHeadingsUpdate, editable =
     ],
     content: marked(content || ''), // Initial content: Markdown -> HTML
     editable: editable,
+    autofocus: 'end', // Auto-focus at the end
     onUpdate: ({ editor }) => {
       // Save as Markdown
       if (onChange) {
@@ -171,6 +213,11 @@ const RichEditor = forwardRef(({ content, onChange, onHeadingsUpdate, editable =
       // Or we can check if the editor is focused.
       if (!editor.isFocused) {
          editor.commands.setContent(marked(content || ''));
+         
+         // If editable changed to true, focus!
+         if (editable) {
+             editor.commands.focus('end');
+         }
          
          // Also update headings initially
          const headings = [];
