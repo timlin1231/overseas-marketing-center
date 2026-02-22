@@ -27,19 +27,21 @@ export const performSeoAudit = async (domain) => {
     // 1. 基础页面抓取（使用 Firecrawl）
     const pageData = await scrapeWebsite(domain);
     
-    // 2. 页面速度分析（使用 PageSpeed Insights）
-    // 如果没有 API Key，返回 null，表示工具缺失
+    // 2. 页面速度分析（使用 PageSpeed Insights 或 Firecrawl Fallback）
     const speedData = await analyzePageSpeed(domain);
     
-    // 3. 执行五大模块审计
+    // 3. 流量分析 (SimilarWeb public via Firecrawl)
+    const trafficData = await auditTraffic(domain);
+
+    // 4. 执行五大模块审计
     const codeServerAudit = await auditCodeAndServer(domain, pageData, speedData);
     const contentAudit = await auditContent(domain, pageData);
     const mobileAudit = await auditMobile(domain, speedData);
-    const aiAudit = await auditAIReadiness(domain, pageData); // 新增 AI 准备度审计
+    const aiAudit = await auditAIReadiness(domain, pageData); 
 
     const overallScore = calculateOverallScore(codeServerAudit, contentAudit, mobileAudit, speedData);
 
-    // 4. 汇总审计结果
+    // 5. 汇总审计结果
     const result = {
       domain,
       timestamp,
@@ -50,6 +52,7 @@ export const performSeoAudit = async (domain) => {
         content: contentAudit,
         mobile: mobileAudit,
         ai: aiAudit,
+        traffic: trafficData, // New section
         scoring: overallScore
       },
       summary: generateSummary(codeServerAudit, contentAudit, mobileAudit, aiAudit, overallScore)
@@ -99,11 +102,11 @@ const scrapeWebsite = async (domain) => {
       html: data.data.html || '',
       markdown: data.data.markdown || '',
       metadata: data.data.metadata || {},
-      links: data.data.metadata?.links || [] // v1 metadata usually contains links or we extract them
+      links: data.data.metadata?.links || []
     };
   } catch (error) {
     console.error('Firecrawl scrape failed:', error);
-    throw error; // 抓取失败直接抛出，因为这是基础数据
+    throw error;
   }
 };
 
@@ -111,22 +114,25 @@ const scrapeWebsite = async (domain) => {
  * 2. 页面速度分析（Google PageSpeed Insights）
  */
 const analyzePageSpeed = async (domain) => {
-  if (!PAGESPEED_API_KEY || PAGESPEED_API_KEY.length === 0) {
-    console.warn('PageSpeed API Key missing.');
-    return null; // 明确返回 null 表示工具缺失
-  }
+  // 即使没有 API Key，也尝试调用（使用公共配额）
+  const hasKey = PAGESPEED_API_KEY && PAGESPEED_API_KEY.length > 0;
+  const keyParam = hasKey ? `&key=${PAGESPEED_API_KEY}` : '';
 
   try {
-    const desktopUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(domain)}&strategy=desktop&key=${PAGESPEED_API_KEY}`;
-    const mobileUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(domain)}&strategy=mobile&key=${PAGESPEED_API_KEY}`;
+    const desktopUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(domain)}&strategy=desktop${keyParam}`;
+    const mobileUrl = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(domain)}&strategy=mobile${keyParam}`;
 
     const [desktopRes, mobileRes] = await Promise.all([
       fetch(desktopUrl),
       fetch(mobileUrl)
     ]);
 
-    // 如果 API 请求失败，也视为工具不可用或调用失败
+    // 如果 API 请求失败 (429 Quota Exceeded 或其他)
     if (!desktopRes.ok || !mobileRes.ok) {
+        if (desktopRes.status === 429 || mobileRes.status === 429) {
+            console.warn('PageSpeed API Quota Exceeded (429).');
+            return { error: 'quota_exceeded' };
+        }
         console.warn('PageSpeed API request failed');
         return null;
     }
@@ -160,13 +166,78 @@ const analyzePageSpeed = async (domain) => {
 };
 
 /**
- * 3. 程序代码、服务器部分审计
+ * 3. 流量分析 (SimilarWeb Public via Firecrawl)
+ */
+const auditTraffic = async (domain) => {
+    // 尝试从 URL 中提取主域名
+    let hostname;
+    try {
+        hostname = new URL(domain).hostname.replace('www.', '');
+    } catch (e) {
+        hostname = domain;
+    }
+
+    const similarWebUrl = `https://www.similarweb.com/website/${hostname}`;
+    
+    try {
+        // 使用 Firecrawl 尝试抓取 SimilarWeb 公开页面
+        const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${FIRECRAWL_API_KEY}`
+            },
+            body: JSON.stringify({
+                url: similarWebUrl,
+                formats: ['markdown'], // 我们只需要文本来提取数据
+                onlyMainContent: true
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const markdown = data.data?.markdown || '';
+            
+            // 简单的正则提取尝试 (SimilarWeb 页面结构经常变，这是尽力而为)
+            // 寻找 "Total Visits" 附近的数字
+            const totalVisitsMatch = markdown.match(/Total Visits\s*([\d.KMB]+)/i);
+            const bounceRateMatch = markdown.match(/Bounce Rate\s*([\d.]+%)/i);
+            const pagesPerVisitMatch = markdown.match(/Pages per Visit\s*([\d.]+)/i);
+            const avgDurationMatch = markdown.match(/Avg Visit Duration\s*([\d:]+)/i);
+
+            return {
+                source: 'SimilarWeb (Public)',
+                url: similarWebUrl,
+                data: {
+                    totalVisits: totalVisitsMatch ? totalVisitsMatch[1] : 'N/A',
+                    bounceRate: bounceRateMatch ? bounceRateMatch[1] : 'N/A',
+                    pagesPerVisit: pagesPerVisitMatch ? pagesPerVisitMatch[1] : 'N/A',
+                    avgDuration: avgDurationMatch ? avgDurationMatch[1] : 'N/A'
+                },
+                success: !!totalVisitsMatch
+            };
+        }
+    } catch (e) {
+        console.warn('Traffic audit failed:', e);
+    }
+
+    return {
+        source: 'SimilarWeb',
+        url: similarWebUrl,
+        data: null,
+        success: false,
+        message: '无法获取免费流量数据，可能被反爬虫拦截或需要 API Key。'
+    };
+};
+
+/**
+ * 4. 程序代码、服务器部分审计
  */
 const auditCodeAndServer = async (domain, pageData, speedData) => {
   const items = [];
   
-  // 3.1 页面打开速度
-  if (speedData) {
+  // 4.1 页面打开速度
+  if (speedData && !speedData.error) {
     const lcpValue = parseFloat(speedData.desktop.lcp);
     items.push({
         category: '页面打开速度',
@@ -178,20 +249,31 @@ const auditCodeAndServer = async (domain, pageData, speedData) => {
         priority: lcpValue > 3 ? 'high' : 'low',
         tool: 'PageSpeed Insights'
     });
+  } else if (speedData && speedData.error === 'quota_exceeded') {
+      items.push({
+        category: '页面打开速度',
+        description: '建议网站打开速度控制在3秒以内',
+        status: 'warning',
+        currentState: 'API 配额耗尽 (429)',
+        issue: '未配置 PageSpeed API Key 或公共配额已用完',
+        suggestion: '请配置 Google PageSpeed API Key 以获取稳定数据，目前只能跳过此项检测',
+        priority: 'medium',
+        tool: 'PageSpeed Insights'
+      });
   } else {
       items.push({
         category: '页面打开速度',
         description: '建议网站打开速度控制在3秒以内',
         status: 'info',
-        currentState: '未检测 (PageSpeed 工具缺失)',
-        issue: '缺乏 PageSpeed API Key',
-        suggestion: '配置 PageSpeed API 以获取真实性能数据',
+        currentState: '未检测',
+        issue: '无法连接 PageSpeed 服务',
+        suggestion: '检查网络或配置 API Key',
         priority: 'low',
         tool: 'PageSpeed Insights'
       });
   }
 
-  // 3.2 SSL 证书
+  // 4.2 SSL 证书
   const hasSSL = domain.startsWith('https://');
   items.push({
     category: 'SSL证书',
@@ -204,7 +286,7 @@ const auditCodeAndServer = async (domain, pageData, speedData) => {
     tool: 'Manual Check'
   });
 
-  // 3.3 Robots.txt 检查
+  // 4.3 Robots.txt 检查
   const robotsCheck = await checkRobotsTxt(domain);
   items.push({
     category: 'Robots.txt配置',
@@ -217,7 +299,7 @@ const auditCodeAndServer = async (domain, pageData, speedData) => {
     tool: 'HTTP Request'
   });
 
-  // 3.4 Sitemap 文件
+  // 4.4 Sitemap 文件
   const sitemapCheck = await checkSitemap(domain);
   items.push({
     category: 'Sitemap文件',
@@ -230,7 +312,7 @@ const auditCodeAndServer = async (domain, pageData, speedData) => {
     tool: 'HTTP Request'
   });
 
-  // 3.5 元标签配置（NoIndex）
+  // 4.5 元标签配置（NoIndex）
   const hasNoIndex = pageData.html.toLowerCase().includes('noindex');
   items.push({
     category: '元标签配置',
@@ -243,7 +325,7 @@ const auditCodeAndServer = async (domain, pageData, speedData) => {
     tool: 'HTML Analysis'
   });
 
-  // 3.6 结构化数据（Schema.org）
+  // 4.6 结构化数据（Schema.org）
   const schemaCheck = checkSchema(pageData.html);
   items.push({
     category: '结构化数据',
@@ -256,7 +338,7 @@ const auditCodeAndServer = async (domain, pageData, speedData) => {
     tool: 'HTML Parser'
   });
 
-  // 3.7 URL 规范化
+  // 4.7 URL 规范化
   const urlCheck = checkURLStructure(domain, pageData.links);
   items.push({
     category: 'URL规范化',
@@ -269,7 +351,7 @@ const auditCodeAndServer = async (domain, pageData, speedData) => {
     tool: 'URL Parser'
   });
 
-  // 3.8 Heading Tag 检查
+  // 4.8 Heading Tag 检查
   const headingCheck = checkHeadings(pageData.html);
   items.push({
     category: 'Heading Tag',
@@ -282,7 +364,7 @@ const auditCodeAndServer = async (domain, pageData, speedData) => {
     tool: 'HTML Parser'
   });
 
-  // 3.9 ALT 属性检查
+  // 4.9 ALT 属性检查
   const altCheck = checkImageAlt(pageData.html);
   items.push({
     category: 'ALT属性',
@@ -295,7 +377,7 @@ const auditCodeAndServer = async (domain, pageData, speedData) => {
     tool: 'HTML Parser'
   });
 
-  // 3.10 死链接检查
+  // 4.10 死链接检查
   const deadLinksCheck = await checkDeadLinks(pageData.links);
   items.push({
     category: '死链接',
@@ -317,13 +399,13 @@ const auditCodeAndServer = async (domain, pageData, speedData) => {
 };
 
 /**
- * 4. 网站内容相关审计
+ * 5. 网站内容相关审计
  */
 const auditContent = async (domain, pageData) => {
   const items = [];
   const { metadata, html, markdown } = pageData;
 
-  // 4.1 Title 检查
+  // 5.1 Title 检查
   const title = metadata.title || '';
   const titleValid = title.length >= 30 && title.length <= 60;
   items.push({
@@ -337,7 +419,7 @@ const auditContent = async (domain, pageData) => {
     tool: 'Metadata Parser'
   });
 
-  // 4.2 Description 检查
+  // 5.2 Description 检查
   const description = metadata.description || '';
   const descValid = description.length >= 90 && description.length <= 160;
   items.push({
@@ -351,7 +433,7 @@ const auditContent = async (domain, pageData) => {
     tool: 'Metadata Parser'
   });
 
-  // 4.3 内容丰富度
+  // 5.3 内容丰富度
   const wordCount = markdown.split(/\s+/).length;
   const contentRich = wordCount > 300;
   items.push({
@@ -365,7 +447,7 @@ const auditContent = async (domain, pageData) => {
     tool: 'Content Analysis'
   });
 
-  // 4.4 关键词密度与强调
+  // 5.4 关键词密度与强调
   const keywordCheck = analyzeKeywordDensity(markdown, title, html);
   items.push({
     category: '关键词使用',
@@ -378,7 +460,7 @@ const auditContent = async (domain, pageData) => {
     tool: 'Text Analysis'
   });
 
-  // 4.5 多媒体内容
+  // 5.5 多媒体内容
   const mediaCheck = checkMultimedia(html);
   items.push({
     category: '丰富页面内容',
@@ -391,7 +473,7 @@ const auditContent = async (domain, pageData) => {
     tool: 'HTML Parser'
   });
 
-  // 4.6 YouTube 嵌入检查
+  // 5.6 YouTube 嵌入检查
   const hasYouTube = html.includes('youtube.com') || html.includes('youtu.be');
   items.push({
     category: 'YouTube',
@@ -404,7 +486,7 @@ const auditContent = async (domain, pageData) => {
     tool: 'HTML Parser'
   });
 
-  // 4.7 Privacy Policy 检查
+  // 5.7 Privacy Policy 检查
   const hasPrivacyPolicy = html.toLowerCase().includes('privacy') && html.toLowerCase().includes('policy');
   items.push({
     category: 'Privacy Policy',
@@ -426,13 +508,13 @@ const auditContent = async (domain, pageData) => {
 };
 
 /**
- * 5. 手机端及 AMP 站点审计
+ * 6. 手机端及 AMP 站点审计
  */
 const auditMobile = async (domain, speedData) => {
   const items = [];
 
-  // 5.1 移动端性能评分
-  if (speedData) {
+  // 6.1 移动端性能评分
+  if (speedData && !speedData.error) {
       const mobileScore = speedData.mobile.score;
       items.push({
         category: '移动端性能',
@@ -444,12 +526,23 @@ const auditMobile = async (domain, speedData) => {
         priority: mobileScore <= 50 ? 'high' : 'low',
         tool: 'PageSpeed Insights'
       });
+  } else if (speedData && speedData.error === 'quota_exceeded') {
+      items.push({
+        category: '移动端性能',
+        description: '移动端评分需要大于50分',
+        status: 'warning',
+        currentState: 'API 配额耗尽',
+        issue: '',
+        suggestion: '请配置 API Key',
+        priority: 'low',
+        tool: 'PageSpeed Insights'
+      });
   } else {
       items.push({
         category: '移动端性能',
         description: '移动端评分需要大于50分',
         status: 'info',
-        currentState: '未检测 (PageSpeed 工具缺失)',
+        currentState: '未检测',
         issue: '',
         suggestion: '配置 PageSpeed API 以获取数据',
         priority: 'low',
@@ -457,7 +550,7 @@ const auditMobile = async (domain, speedData) => {
       });
   }
 
-  // 5.2 响应式支持
+  // 6.2 响应式支持
   items.push({
     category: '响应式支持',
     description: '网站应支持多种终端设备',
@@ -469,7 +562,7 @@ const auditMobile = async (domain, speedData) => {
     tool: 'Manual Check'
   });
 
-  // 5.3 AMP 站点检查
+  // 6.3 AMP 站点检查
   items.push({
     category: 'AMP网站',
     description: 'AMP 可提升移动端加载速度',
@@ -490,14 +583,14 @@ const auditMobile = async (domain, speedData) => {
 };
 
 /**
- * 6. AI 搜索准备度 (AI Readiness) - 新增
+ * 7. AI 搜索准备度 (AI Readiness) - 新增
  */
 const auditAIReadiness = async (domain, pageData) => {
     const items = [];
     const robotsCheck = await checkRobotsTxt(domain);
     const llmsTxtCheck = await checkLLMsTxt(domain);
     
-    // 6.1 Robots.txt 对 AI Bot 的友好度
+    // 7.1 Robots.txt 对 AI Bot 的友好度
     const aiBots = ['GPTBot', 'Claude-Web', 'Perplexity-Bot', 'Googlebot-Extended'];
     const blockedBots = aiBots.filter(bot => 
         robotsCheck.content && robotsCheck.content.includes(`User-agent: ${bot}`) && robotsCheck.content.includes('Disallow: /')
@@ -514,7 +607,7 @@ const auditAIReadiness = async (domain, pageData) => {
         tool: 'Robots.txt Analysis'
     });
 
-    // 6.2 LLMs.txt 配置
+    // 7.2 LLMs.txt 配置
     items.push({
         category: 'LLMs.txt 配置',
         description: '是否配置 /llms.txt 标准文件',
@@ -526,7 +619,7 @@ const auditAIReadiness = async (domain, pageData) => {
         tool: 'HTTP Request'
     });
 
-    // 6.3 Meta 标签 AI 友好性
+    // 7.3 Meta 标签 AI 友好性
     const metaRobots = pageData.html.match(/<meta\s+name=["']robots["'][^>]*content=["']([^"']*)["']/i);
     const metaContent = metaRobots ? metaRobots[1].toLowerCase() : '';
     const isAiFriendly = !metaContent.includes('noimageai') && !metaContent.includes('noai');
@@ -551,11 +644,11 @@ const auditAIReadiness = async (domain, pageData) => {
 };
 
 /**
- * 7. 计算整体评分
+ * 8. 计算整体评分
  */
 const calculateOverallScore = (codeServerAudit, contentAudit, mobileAudit, speedData) => {
-  const desktopScore = speedData ? speedData.desktop.score : 0;
-  const mobileScore = speedData ? speedData.mobile.score : 0;
+  const desktopScore = speedData && !speedData.error ? speedData.desktop.score : 0;
+  const mobileScore = speedData && !speedData.error ? speedData.mobile.score : 0;
   
   const codeServerPass = (codeServerAudit.passedItems / codeServerAudit.totalItems) * 100;
   const contentPass = (contentAudit.passedItems / contentAudit.totalItems) * 100;
@@ -563,7 +656,7 @@ const calculateOverallScore = (codeServerAudit, contentAudit, mobileAudit, speed
 
   // 调整权重，如果缺少 Speed 数据，权重分摊到其他项
   let overallScore;
-  if (speedData) {
+  if (speedData && !speedData.error) {
       overallScore = Math.round(
         (codeServerPass * 0.35 + contentPass * 0.25 + mobilePass * 0.15 + desktopScore * 0.15 + mobileScore * 0.10)
       );
@@ -576,8 +669,8 @@ const calculateOverallScore = (codeServerAudit, contentAudit, mobileAudit, speed
 
   return {
     overall: overallScore,
-    desktop: speedData ? Math.round(desktopScore) : 0,
-    mobile: speedData ? Math.round(mobileScore) : 0,
+    desktop: speedData && !speedData.error ? Math.round(desktopScore) : 0,
+    mobile: speedData && !speedData.error ? Math.round(mobileScore) : 0,
     codeServer: Math.round(codeServerPass),
     content: Math.round(contentPass),
     mobileCompatibility: Math.round(mobilePass),
@@ -585,14 +678,14 @@ const calculateOverallScore = (codeServerAudit, contentAudit, mobileAudit, speed
       '程序代码、服务器': codeServerPass.toFixed(1) + '%',
       '网站内容': contentPass.toFixed(1) + '%',
       '手机端': mobilePass.toFixed(1) + '%',
-      '桌面端性能': speedData ? desktopScore.toFixed(1) : 'N/A',
-      '移动端性能': speedData ? mobileScore.toFixed(1) : 'N/A'
+      '桌面端性能': speedData && !speedData.error ? desktopScore.toFixed(1) : 'N/A',
+      '移动端性能': speedData && !speedData.error ? mobileScore.toFixed(1) : 'N/A'
     }
   };
 };
 
 /**
- * 8. 生成审计总结
+ * 9. 生成审计总结
  */
 const generateSummary = (codeServerAudit, contentAudit, mobileAudit, aiAudit, overallScore) => {
   const allItems = [
@@ -626,22 +719,30 @@ const generateSummary = (codeServerAudit, contentAudit, mobileAudit, aiAudit, ov
 // ============== 辅助函数 ==============
 
 const checkFileWithFallback = async (domain, filename) => {
-  // 1. 尝试原始域名
+  // 1. 尝试原始域名 (强制 follow redirect)
   let url = new URL(filename, domain).href;
   try {
-    let response = await fetch(url);
+    let response = await fetch(url, { redirect: 'follow' });
     const contentType = response.headers.get('content-type') || '';
     
-    // 如果返回 OK 且不是 HTML (可能是重定向到了首页)
-    if (response.ok && !contentType.includes('text/html')) {
-      const text = await response.text();
-      return { exists: true, content: text, url };
+    // 宽容模式：只要不是 HTML，或者是 HTML 但包含特定标记（对于 sitemap）
+    // 对于 llms.txt，必须是 text/plain 或 markdown
+    if (response.ok) {
+        // 如果是 robots.txt 或 llms.txt，确保不是 HTML 首页
+        if ((filename.includes('txt')) && contentType.includes('text/html')) {
+             // 可能是软 404 跳转到首页，视为不存在
+        } else {
+             const text = await response.text();
+             // 二次验证：robots.txt 应该包含 "User-agent"
+             if (filename === '/robots.txt' && !text.includes('User-agent')) return { exists: false, content: '', url };
+             return { exists: true, content: text, url: response.url };
+        }
     }
   } catch (e) {
     // ignore
   }
 
-  // 2. 尝试 www 或去 www
+  // 2. 尝试 www 或去 www (虽然 fetch 会自动重定向，但有时 DNS 级别不同)
   const urlObj = new URL(domain);
   let altDomain;
   if (urlObj.hostname.startsWith('www.')) {
@@ -652,12 +753,17 @@ const checkFileWithFallback = async (domain, filename) => {
   
   try {
     const altUrl = new URL(filename, `${urlObj.protocol}//${altDomain}`).href;
-    const response = await fetch(altUrl);
+    const response = await fetch(altUrl, { redirect: 'follow' });
     const contentType = response.headers.get('content-type') || '';
 
-    if (response.ok && !contentType.includes('text/html')) {
-      const text = await response.text();
-      return { exists: true, content: text, url: altUrl };
+    if (response.ok) {
+         if ((filename.includes('txt')) && contentType.includes('text/html')) {
+             // ignore
+        } else {
+             const text = await response.text();
+             if (filename === '/robots.txt' && !text.includes('User-agent')) return { exists: false, content: '', url: altUrl };
+             return { exists: true, content: text, url: response.url };
+        }
     }
   } catch (e) {
     // ignore
@@ -692,25 +798,30 @@ const checkSitemap = async (domain) => {
 };
 
 const checkSchema = (html) => {
-  const jsonLdMatches = html.match(/<script type="application\/ld\+json">(.*?)<\/script>/gs);
+  // 优化正则：支持单引号、多行、属性乱序
+  const jsonLdMatches = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
   if (!jsonLdMatches) return { hasSchema: false, types: [] };
   
   const types = new Set();
   jsonLdMatches.forEach(match => {
     try {
-      const json = JSON.parse(match.replace(/<\/?script[^>]*>/g, ''));
-      if (json['@type']) types.add(json['@type']);
-      if (json['@graph']) {
-          json['@graph'].forEach(item => {
-              if(item['@type']) types.add(item['@type']);
-          });
-      }
+      // 提取内容
+      const content = match.replace(/<script[^>]*>|<\/script>/gi, '');
+      const json = JSON.parse(content);
+      
+      const extractType = (obj) => {
+          if (obj['@type']) types.add(obj['@type']);
+          if (obj['@graph']) obj['@graph'].forEach(extractType);
+      };
+      extractType(json);
+
     } catch (e) {}
   });
   
   return { hasSchema: types.size > 0, types: Array.from(types) };
 };
 
+// ... 其他辅助函数保持不变 ...
 const checkURLStructure = (domain, links) => {
   const issues = [];
   let validCount = 0;
@@ -800,149 +911,4 @@ const checkMultimedia = (html) => {
     imageCount,
     videoCount
   };
-};
-
-// ============== 历史记录管理（保持不变）==============
-
-export const getAuditHistory = async () => {
-  try {
-    const files = await getRepoContent(AUDIT_RECORDS_DIR);
-    if (!files || files.length === 0) {
-      return migrateFromLocalStorage();
-    }
-
-    const records = [];
-    for (const file of files) {
-      if (file.type === 'file' && file.name.endsWith('.json')) {
-        try {
-          const content = await getFileContent(file.path);
-          if (content && content.content) {
-            const record = JSON.parse(content.content);
-            records.push(record);
-          }
-        } catch (e) {
-          console.error(`Failed to load ${file.name}:`, e);
-        }
-      }
-    }
-
-    return records.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  } catch (e) {
-    console.error('Failed to load history from GitHub:', e);
-    return getLocalHistory();
-  }
-};
-
-const migrateFromLocalStorage = async () => {
-  const localHistory = getLocalHistory();
-  if (localHistory.length === 0) return [];
-
-  console.log('Migrating audit history from localStorage to GitHub...');
-  
-  for (const record of localHistory) {
-    try {
-      await saveToGitHub(record);
-    } catch (e) {
-      console.error('Migration failed for record:', e);
-    }
-  }
-
-  return localHistory;
-};
-
-const getLocalHistory = () => {
-  try {
-    const history = localStorage.getItem('seo_audit_history');
-    return history ? JSON.parse(history) : [];
-  } catch (e) {
-    console.error('Failed to parse localStorage history', e);
-    return [];
-  }
-};
-
-const saveToGitHub = async (result) => {
-  const sanitizedDomain = result.domain.replace(/[^a-zA-Z0-9.-]/g, '_');
-  const timestamp = new Date(result.timestamp).getTime();
-  const filename = `${sanitizedDomain}_${timestamp}.json`;
-  const filePath = `${AUDIT_RECORDS_DIR}/${filename}`;
-
-  const content = JSON.stringify(result, null, 2);
-  await putFile(filePath, content, `Add SEO audit record for ${result.domain}`);
-};
-
-export const saveAuditResult = async (result) => {
-  try {
-    await saveToGitHub(result);
-
-    const localHistory = getLocalHistory();
-    const newHistory = [result, ...localHistory].slice(0, 20);
-    localStorage.setItem('seo_audit_history', JSON.stringify(newHistory));
-
-    return await getAuditHistory();
-  } catch (e) {
-    console.error('Failed to save to GitHub:', e);
-    const localHistory = getLocalHistory();
-    const newHistory = [result, ...localHistory].slice(0, 20);
-    localStorage.setItem('seo_audit_history', JSON.stringify(newHistory));
-    return newHistory;
-  }
-};
-
-export const deleteAuditRecord = async (timestamp) => {
-    try {
-      const files = await getRepoContent(AUDIT_RECORDS_DIR);
-      if (files) {
-        for (const file of files) {
-          if (file.type === 'file' && file.name.includes(new Date(timestamp).getTime().toString())) {
-            console.log(`Skipping GitHub deletion for ${file.name}`);
-          }
-        }
-      }
-
-      const localHistory = getLocalHistory();
-      const newHistory = localHistory.filter(item => item.timestamp !== timestamp);
-      localStorage.setItem('seo_audit_history', JSON.stringify(newHistory));
-
-      return await getAuditHistory();
-    } catch (e) {
-      console.error('Failed to delete from GitHub:', e);
-      const localHistory = getLocalHistory();
-      const newHistory = localHistory.filter(item => item.timestamp !== timestamp);
-      localStorage.setItem('seo_audit_history', JSON.stringify(newHistory));
-      return newHistory;
-    }
-};
-
-export const exportToCsv = (result) => {
-  const headers = ['Section', 'Category', 'Status', 'Issue', 'Suggestion', 'Priority'];
-  const rows = [];
-  
-  Object.values(result.sections).forEach(section => {
-    if (section && section.items) {
-      section.items.forEach(item => {
-        rows.push([
-          section.title,
-          item.category,
-          item.status,
-          item.issue || '-',
-          item.suggestion,
-          item.priority
-        ]);
-      });
-    }
-  });
-
-  const csvContent = [
-    headers.join(','),
-    ...rows.map(r => r.map(c => `"${c}"`).join(','))
-  ].join('\n');
-
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.setAttribute('href', url);
-  link.setAttribute('download', `seo_audit_${result.domain.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
 };

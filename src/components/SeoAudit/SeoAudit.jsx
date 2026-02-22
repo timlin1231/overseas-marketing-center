@@ -19,7 +19,8 @@ import {
   Globe,
   Smartphone,
   Code,
-  Bot
+  Bot,
+  TrendingUp
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
@@ -92,6 +93,56 @@ const MetricCard = ({ title, value, icon, subtext }) => {
       </div>
     </div>
   );
+};
+
+// Traffic Detail Component
+const TrafficSection = ({ data }) => {
+    if (!data || !data.success || !data.data) return null;
+
+    return (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-6">
+            <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                <div className="flex items-center space-x-3">
+                    <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-purple-600">
+                        <TrendingUp size={20} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold">流量估算</h3>
+                        <p className="text-xs text-gray-500">
+                            数据来源: {data.source} (仅供参考)
+                        </p>
+                    </div>
+                </div>
+                <a 
+                    href={data.url} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="text-xs text-blue-500 hover:underline"
+                >
+                    查看详情
+                </a>
+            </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6">
+                <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl text-center">
+                    <p className="text-xs text-gray-500 mb-1">总访问量</p>
+                    <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{data.data.totalVisits || '-'}</p>
+                </div>
+                <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl text-center">
+                    <p className="text-xs text-gray-500 mb-1">跳出率</p>
+                    <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{data.data.bounceRate || '-'}</p>
+                </div>
+                <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl text-center">
+                    <p className="text-xs text-gray-500 mb-1">每次访问页数</p>
+                    <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{data.data.pagesPerVisit || '-'}</p>
+                </div>
+                <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl text-center">
+                    <p className="text-xs text-gray-500 mb-1">平均访问时长</p>
+                    <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{data.data.avgDuration || '-'}</p>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 // Section Detail Component
@@ -539,6 +590,10 @@ const SeoAudit = () => {
                     icon={Bot} 
                     data={result.sections?.ai} 
                   />
+
+                  {result.sections?.traffic && (
+                    <TrafficSection data={result.sections?.traffic} />
+                  )}
                 </div>
 
               </div>
