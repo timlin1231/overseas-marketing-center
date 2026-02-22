@@ -16,7 +16,8 @@ import {
   Loader,
   CheckSquare,
   Square,
-  Settings
+  Settings,
+  ArrowLeft
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getRepoContent, getFileContent, putFile, deleteFile, deleteDirectory, createDirectory } from './GitHubService';
@@ -516,8 +517,8 @@ const KnowledgeBase = () => {
         </div>
 
         <div className="p-4 border-t border-gray-200 dark:border-gray-800">
-          <Link to="/" className="text-sm text-gray-500 hover:text-blue-500 flex items-center">
-            <ChevronRight size={14} className="rotate-180 mr-1" />
+          <Link to="/" className="group flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-all dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700 dark:hover:text-white">
+            <ArrowLeft size={16} className="mr-2 group-hover:-translate-x-1 transition-transform" />
             返回首页
           </Link>
         </div>
