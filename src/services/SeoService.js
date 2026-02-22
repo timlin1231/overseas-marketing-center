@@ -108,7 +108,7 @@ const scrapeWebsite = async (domain) => {
  * 2. 页面速度分析（Google PageSpeed Insights）
  */
 const analyzePageSpeed = async (domain) => {
-  if (!PAGESPEED_API_KEY) {
+  if (!PAGESPEED_API_KEY || PAGESPEED_API_KEY.length === 0) {
     console.warn('PageSpeed API Key missing, using mock data.');
     return getMockSpeedData();
   }
@@ -122,23 +122,27 @@ const analyzePageSpeed = async (domain) => {
       fetch(mobileUrl)
     ]);
 
-    const desktop = await desktopRes.json();
-    const mobile = await mobileRes.json();
+    // Handle non-200 responses safely
+    const desktop = desktopRes.ok ? await desktopRes.json() : {};
+    const mobile = mobileRes.ok ? await mobileRes.json() : {};
+
+    const getScore = (res) => res.lighthouseResult?.categories?.performance?.score * 100 || 0;
+    const getAudit = (res, key) => res.lighthouseResult?.audits?.[key]?.displayValue || 'N/A';
 
     return {
       desktop: {
-        score: desktop.lighthouseResult?.categories?.performance?.score * 100 || 0,
-        fcp: desktop.lighthouseResult?.audits['first-contentful-paint']?.displayValue || 'N/A',
-        lcp: desktop.lighthouseResult?.audits['largest-contentful-paint']?.displayValue || 'N/A',
-        ttfb: desktop.lighthouseResult?.audits['server-response-time']?.displayValue || 'N/A',
-        cls: desktop.lighthouseResult?.audits['cumulative-layout-shift']?.displayValue || 'N/A'
+        score: getScore(desktop),
+        fcp: getAudit(desktop, 'first-contentful-paint'),
+        lcp: getAudit(desktop, 'largest-contentful-paint'),
+        ttfb: getAudit(desktop, 'server-response-time'),
+        cls: getAudit(desktop, 'cumulative-layout-shift')
       },
       mobile: {
-        score: mobile.lighthouseResult?.categories?.performance?.score * 100 || 0,
-        fcp: mobile.lighthouseResult?.audits['first-contentful-paint']?.displayValue || 'N/A',
-        lcp: mobile.lighthouseResult?.audits['largest-contentful-paint']?.displayValue || 'N/A',
-        ttfb: mobile.lighthouseResult?.audits['server-response-time']?.displayValue || 'N/A',
-        cls: mobile.lighthouseResult?.audits['cumulative-layout-shift']?.displayValue || 'N/A'
+        score: getScore(mobile),
+        fcp: getAudit(mobile, 'first-contentful-paint'),
+        lcp: getAudit(mobile, 'largest-contentful-paint'),
+        ttfb: getAudit(mobile, 'server-response-time'),
+        cls: getAudit(mobile, 'cumulative-layout-shift')
       }
     };
   } catch (error) {
