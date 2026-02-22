@@ -71,7 +71,7 @@ const scrapeWebsite = async (domain) => {
   }
 
   try {
-    const response = await fetch('https://api.firecrawl.dev/v0/scrape', {
+    const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -79,11 +79,10 @@ const scrapeWebsite = async (domain) => {
       },
       body: JSON.stringify({
         url: domain,
-        pageOptions: {
-          onlyMainContent: false,
-          includeHtml: true,
-          screenshot: false
-        }
+        formats: ['markdown', 'html'],
+        onlyMainContent: false,
+        includeTags: [],
+        excludeTags: []
       })
     });
 
@@ -98,9 +97,9 @@ const scrapeWebsite = async (domain) => {
 
     return {
       html: data.data.html || '',
-      markdown: data.data.content || '',
+      markdown: data.data.markdown || '',
       metadata: data.data.metadata || {},
-      links: data.data.links || []
+      links: data.data.metadata?.links || [] // v1 metadata usually contains links or we extract them
     };
   } catch (error) {
     console.error('Firecrawl scrape failed:', error);
