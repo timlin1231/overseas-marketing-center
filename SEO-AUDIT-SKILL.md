@@ -1,13 +1,15 @@
 # SEO Audit Skill
 
-This skill performs a comprehensive technical SEO audit of a website based on professional standards (GEO Diagnosis).
+This skill performs a comprehensive technical SEO audit of a website based on professional standards (GEO Diagnosis) and AI Readiness checks.
+
+> **Note**: This skill prioritizes REAL DATA. If a required tool (e.g., PageSpeed Insights) is not configured, it will report "Tool Missing" rather than generating mock data.
 
 ## Audit Dimensions
 
 The audit covers 4 main sections:
 
 ### 1. Code & Server (程序代码、服务器部分)
-- **Page Speed**: LCP should be < 3s.
+- **Page Speed**: LCP should be < 3s. (Requires PageSpeed API)
 - **SSL Certificate**: Must use HTTPS.
 - **Robots.txt**: Must exist and allow AI bots (GPTBot, Claude-Web, etc.).
 - **Sitemap**: Must exist (sitemap.xml).
@@ -23,20 +25,20 @@ The audit covers 4 main sections:
 - **Description**: 90-160 chars, summarizes content.
 - **Keywords**: Core keywords presence.
 - **Content Richness**: Main content > 300 words.
-- **Keyword Density**: Natural distribution, use `<strong>`.
+- **Keyword Density**: Natural distribution, must use `<strong>` tags.
 - **Multimedia**: Images and videos presence.
 - **YouTube**: Embedding YouTube videos is recommended.
 - **Privacy Policy**: Must exist.
 
 ### 3. Mobile & AMP (手机端及AMP站点)
-- **Mobile Performance**: Score > 50.
+- **Mobile Performance**: Score > 50. (Requires PageSpeed API)
 - **Responsive Design**: Compatible with various devices.
 - **AMP**: Accelerated Mobile Pages support (optional but recommended).
 
-### 4. Overall Scoring (整体评分)
-- **Desktop Score**: Target > 80.
-- **Mobile Score**: Target > 50.
-- Weighted calculation based on the above sections.
+### 4. AI Readiness (AI 搜索准备度 - New!)
+- **Robots.txt AI Support**: Check if GPTBot, Claude-Web, Perplexity-Bot are blocked.
+- **LLMs.txt**: Check for existence of `/llms.txt` standard file.
+- **Meta AI Tags**: Ensure no `noai` or `noimageai` tags exist.
 
 ## Output Format
 
@@ -54,7 +56,8 @@ The skill returns a JSON object with the following structure:
   "sections": {
     "codeServer": { "title": "...", "items": [...] },
     "content": { "title": "...", "items": [...] },
-    "mobile": { "title": "...", "items": [...] }
+    "mobile": { "title": "...", "items": [...] },
+    "ai": { "title": "AI 搜索准备度", "items": [...] }
   },
   "summary": {
     "health": "Good",
@@ -65,6 +68,6 @@ The skill returns a JSON object with the following structure:
 ```
 
 ## Tools Used
-- **Firecrawl**: For full page scraping (HTML, Markdown, Metadata).
-- **PageSpeed Insights**: For Core Web Vitals and performance scores.
+- **Firecrawl**: For full page scraping (HTML, Markdown, Metadata). **REQUIRED**.
+- **PageSpeed Insights**: For Core Web Vitals and performance scores. **OPTIONAL** (If missing, performance sections will show N/A).
 - **Validator**: For Schema.org and HTML validation logic.

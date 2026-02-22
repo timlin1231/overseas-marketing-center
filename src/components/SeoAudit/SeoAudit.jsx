@@ -18,7 +18,8 @@ import {
   ChevronUp,
   Globe,
   Smartphone,
-  Code
+  Code,
+  Bot
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { 
@@ -531,6 +532,12 @@ const SeoAudit = () => {
                     title="3. 移动端适配" 
                     icon={Smartphone} 
                     data={result.sections?.mobile} 
+                  />
+
+                  <AuditSection 
+                    title="4. AI 搜索准备度 (AISO)" 
+                    icon={Bot} 
+                    data={result.sections?.ai} 
                   />
                 </div>
 

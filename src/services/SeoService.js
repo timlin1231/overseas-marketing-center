@@ -4,7 +4,8 @@
  * 1. 程序代码、服务器部分
  * 2. 网站内容相关
  * 3. 手机端及 AMP 站点
- * 4. 整体评分
+ * 4. AI 搜索准备度 (新增)
+ * 5. 整体评分
  * 
  * 集成工具：Firecrawl（页面抓取）、PageSpeed Insights（性能）、Schema.org Validator（结构化数据）
  */
@@ -27,12 +28,15 @@ export const performSeoAudit = async (domain) => {
     const pageData = await scrapeWebsite(domain);
     
     // 2. 页面速度分析（使用 PageSpeed Insights）
+    // 如果没有 API Key，返回 null，表示工具缺失
     const speedData = await analyzePageSpeed(domain);
     
-    // 3. 执行四大模块审计
+    // 3. 执行五大模块审计
     const codeServerAudit = await auditCodeAndServer(domain, pageData, speedData);
     const contentAudit = await auditContent(domain, pageData);
     const mobileAudit = await auditMobile(domain, speedData);
+    const aiAudit = await auditAIReadiness(domain, pageData); // 新增 AI 准备度审计
+
     const overallScore = calculateOverallScore(codeServerAudit, contentAudit, mobileAudit, speedData);
 
     // 4. 汇总审计结果
@@ -45,9 +49,10 @@ export const performSeoAudit = async (domain) => {
         codeServer: codeServerAudit,
         content: contentAudit,
         mobile: mobileAudit,
+        ai: aiAudit,
         scoring: overallScore
       },
-      summary: generateSummary(codeServerAudit, contentAudit, mobileAudit, overallScore)
+      summary: generateSummary(codeServerAudit, contentAudit, mobileAudit, aiAudit, overallScore)
     };
 
     return result;
@@ -62,8 +67,7 @@ export const performSeoAudit = async (domain) => {
  */
 const scrapeWebsite = async (domain) => {
   if (!FIRECRAWL_API_KEY) {
-    console.warn('Firecrawl API Key missing, using mock data.');
-    return getMockPageData(domain);
+    throw new Error('Firecrawl API Key 未配置，无法进行页面抓取。请在设置中配置 API Key。');
   }
 
   try {
@@ -100,7 +104,7 @@ const scrapeWebsite = async (domain) => {
     };
   } catch (error) {
     console.error('Firecrawl scrape failed:', error);
-    return getMockPageData(domain);
+    throw error; // 抓取失败直接抛出，因为这是基础数据
   }
 };
 
@@ -109,8 +113,8 @@ const scrapeWebsite = async (domain) => {
  */
 const analyzePageSpeed = async (domain) => {
   if (!PAGESPEED_API_KEY || PAGESPEED_API_KEY.length === 0) {
-    console.warn('PageSpeed API Key missing, using mock data.');
-    return getMockSpeedData();
+    console.warn('PageSpeed API Key missing.');
+    return null; // 明确返回 null 表示工具缺失
   }
 
   try {
@@ -122,9 +126,14 @@ const analyzePageSpeed = async (domain) => {
       fetch(mobileUrl)
     ]);
 
-    // Handle non-200 responses safely
-    const desktop = desktopRes.ok ? await desktopRes.json() : {};
-    const mobile = mobileRes.ok ? await mobileRes.json() : {};
+    // 如果 API 请求失败，也视为工具不可用或调用失败
+    if (!desktopRes.ok || !mobileRes.ok) {
+        console.warn('PageSpeed API request failed');
+        return null;
+    }
+
+    const desktop = await desktopRes.json();
+    const mobile = await mobileRes.json();
 
     const getScore = (res) => res.lighthouseResult?.categories?.performance?.score * 100 || 0;
     const getAudit = (res, key) => res.lighthouseResult?.audits?.[key]?.displayValue || 'N/A';
@@ -147,7 +156,7 @@ const analyzePageSpeed = async (domain) => {
     };
   } catch (error) {
     console.error('PageSpeed analysis failed:', error);
-    return getMockSpeedData();
+    return null;
   }
 };
 
@@ -158,17 +167,30 @@ const auditCodeAndServer = async (domain, pageData, speedData) => {
   const items = [];
   
   // 3.1 页面打开速度
-  const lcpValue = parseFloat(speedData.desktop.lcp);
-  items.push({
-    category: '页面打开速度',
-    description: '建议网站打开速度控制在3秒以内',
-    status: lcpValue <= 3 ? 'pass' : 'fail',
-    currentState: `桌面端 LCP: ${speedData.desktop.lcp}`,
-    issue: lcpValue > 3 ? `页面加载速度为 ${speedData.desktop.lcp}，超过建议值` : '',
-    suggestion: lcpValue > 3 ? '优化图片大小、启用 CDN、减少 JavaScript 执行时间' : '速度良好',
-    priority: lcpValue > 3 ? 'high' : 'low',
-    tool: 'PageSpeed Insights'
-  });
+  if (speedData) {
+    const lcpValue = parseFloat(speedData.desktop.lcp);
+    items.push({
+        category: '页面打开速度',
+        description: '建议网站打开速度控制在3秒以内',
+        status: lcpValue <= 3 ? 'pass' : 'fail',
+        currentState: `桌面端 LCP: ${speedData.desktop.lcp}`,
+        issue: lcpValue > 3 ? `页面加载速度为 ${speedData.desktop.lcp}，超过建议值` : '',
+        suggestion: lcpValue > 3 ? '优化图片大小、启用 CDN、减少 JavaScript 执行时间' : '速度良好',
+        priority: lcpValue > 3 ? 'high' : 'low',
+        tool: 'PageSpeed Insights'
+    });
+  } else {
+      items.push({
+        category: '页面打开速度',
+        description: '建议网站打开速度控制在3秒以内',
+        status: 'info',
+        currentState: '未检测 (PageSpeed 工具缺失)',
+        issue: '缺乏 PageSpeed API Key',
+        suggestion: '配置 PageSpeed API 以获取真实性能数据',
+        priority: 'low',
+        tool: 'PageSpeed Insights'
+      });
+  }
 
   // 3.2 SSL 证书
   const hasSSL = domain.startsWith('https://');
@@ -344,14 +366,14 @@ const auditContent = async (domain, pageData) => {
     tool: 'Content Analysis'
   });
 
-  // 4.4 关键词密度（简化版）
-  const keywordCheck = analyzeKeywordDensity(markdown, title);
+  // 4.4 关键词密度与强调
+  const keywordCheck = analyzeKeywordDensity(markdown, title, html);
   items.push({
     category: '关键词使用',
     description: '关键词自然分布，使用<strong>标签强调',
     status: keywordCheck.isOptimal ? 'pass' : 'warning',
-    currentState: `主要关键词: ${keywordCheck.topKeywords.slice(0, 3).join(', ')}`,
-    issue: !keywordCheck.isOptimal ? '关键词密度可能过低或过高' : '',
+    currentState: `Top关键词: ${keywordCheck.topKeywords.slice(0, 3).join(', ')}`,
+    issue: !keywordCheck.isOptimal ? '关键词密度异常或未使用 Strong 标签强调' : '',
     suggestion: '确保核心关键词自然出现在标题、段落首句和<strong>标签中',
     priority: 'medium',
     tool: 'Text Analysis'
@@ -411,20 +433,32 @@ const auditMobile = async (domain, speedData) => {
   const items = [];
 
   // 5.1 移动端性能评分
-  const mobileScore = speedData.mobile.score;
-  items.push({
-    category: '移动端性能',
-    description: '移动端评分需要大于50分',
-    status: mobileScore > 50 ? 'pass' : 'fail',
-    currentState: `移动端评分: ${mobileScore.toFixed(0)}/100`,
-    issue: mobileScore <= 50 ? '移动端性能较差' : '',
-    suggestion: mobileScore <= 50 ? '优化移动端资源加载、减少渲染阻塞' : '移动端性能良好',
-    priority: mobileScore <= 50 ? 'high' : 'low',
-    tool: 'PageSpeed Insights'
-  });
+  if (speedData) {
+      const mobileScore = speedData.mobile.score;
+      items.push({
+        category: '移动端性能',
+        description: '移动端评分需要大于50分',
+        status: mobileScore > 50 ? 'pass' : 'fail',
+        currentState: `移动端评分: ${mobileScore.toFixed(0)}/100`,
+        issue: mobileScore <= 50 ? '移动端性能较差' : '',
+        suggestion: mobileScore <= 50 ? '优化移动端资源加载、减少渲染阻塞' : '移动端性能良好',
+        priority: mobileScore <= 50 ? 'high' : 'low',
+        tool: 'PageSpeed Insights'
+      });
+  } else {
+      items.push({
+        category: '移动端性能',
+        description: '移动端评分需要大于50分',
+        status: 'info',
+        currentState: '未检测 (PageSpeed 工具缺失)',
+        issue: '',
+        suggestion: '配置 PageSpeed API 以获取数据',
+        priority: 'low',
+        tool: 'PageSpeed Insights'
+      });
+  }
 
-  // 5.2 响应式支持（通过 viewport meta 检测）
-  // Note: 这需要在 scrapeWebsite 时获取
+  // 5.2 响应式支持
   items.push({
     category: '响应式支持',
     description: '网站应支持多种终端设备',
@@ -457,24 +491,94 @@ const auditMobile = async (domain, speedData) => {
 };
 
 /**
- * 6. 计算整体评分
+ * 6. AI 搜索准备度 (AI Readiness) - 新增
+ */
+const auditAIReadiness = async (domain, pageData) => {
+    const items = [];
+    const robotsCheck = await checkRobotsTxt(domain);
+    const llmsTxtCheck = await checkLLMsTxt(domain);
+    
+    // 6.1 Robots.txt 对 AI Bot 的友好度
+    const aiBots = ['GPTBot', 'Claude-Web', 'Perplexity-Bot', 'Googlebot-Extended'];
+    const blockedBots = aiBots.filter(bot => 
+        robotsCheck.content && robotsCheck.content.includes(`User-agent: ${bot}`) && robotsCheck.content.includes('Disallow: /')
+    );
+    
+    items.push({
+        category: 'AI 爬虫访问权限',
+        description: '是否允许主流 AI Bot (GPT, Claude, Perplexity) 访问',
+        status: blockedBots.length === 0 ? 'pass' : 'warning',
+        currentState: blockedBots.length === 0 ? '允许主要 AI 爬虫' : `拦截了: ${blockedBots.join(', ')}`,
+        issue: blockedBots.length > 0 ? '阻止了部分 AI 爬虫，可能影响 AI 搜索排名' : '',
+        suggestion: '建议在 robots.txt 中明确允许 GPTBot, Claude-Web 等 User-Agent',
+        priority: 'high',
+        tool: 'Robots.txt Analysis'
+    });
+
+    // 6.2 LLMs.txt 配置
+    items.push({
+        category: 'LLMs.txt 配置',
+        description: '是否配置 /llms.txt 标准文件',
+        status: llmsTxtCheck.exists ? 'pass' : 'warning',
+        currentState: llmsTxtCheck.exists ? '已配置 llms.txt' : '未找到 llms.txt',
+        issue: !llmsTxtCheck.exists ? '缺少 LLM 专用描述文件' : '',
+        suggestion: '创建 llms.txt 文件，帮助 LLM 更好地理解网站内容结构 (参考 llmstxt.org)',
+        priority: 'medium',
+        tool: 'HTTP Request'
+    });
+
+    // 6.3 Meta 标签 AI 友好性
+    const metaRobots = pageData.html.match(/<meta\s+name=["']robots["'][^>]*content=["']([^"']*)["']/i);
+    const metaContent = metaRobots ? metaRobots[1].toLowerCase() : '';
+    const isAiFriendly = !metaContent.includes('noimageai') && !metaContent.includes('noai');
+    
+    items.push({
+        category: 'Meta 标签 AI 限制',
+        description: '检查是否存在针对 AI 的限制标签 (noai, noimageai)',
+        status: isAiFriendly ? 'pass' : 'warning',
+        currentState: isAiFriendly ? '无 AI 限制标签' : '存在 AI 限制标签',
+        issue: !isAiFriendly ? 'Meta 标签中包含 noai 限制' : '',
+        suggestion: '除非有版权顾虑，否则建议移除 noai 标签以增加 AI 曝光',
+        priority: 'low',
+        tool: 'HTML Analysis'
+    });
+
+    return {
+        title: 'AI 搜索准备度',
+        totalItems: items.length,
+        passedItems: items.filter(i => i.status === 'pass').length,
+        items
+    };
+};
+
+/**
+ * 7. 计算整体评分
  */
 const calculateOverallScore = (codeServerAudit, contentAudit, mobileAudit, speedData) => {
-  const desktopScore = speedData.desktop.score;
-  const mobileScore = speedData.mobile.score;
+  const desktopScore = speedData ? speedData.desktop.score : 0;
+  const mobileScore = speedData ? speedData.mobile.score : 0;
   
   const codeServerPass = (codeServerAudit.passedItems / codeServerAudit.totalItems) * 100;
   const contentPass = (contentAudit.passedItems / contentAudit.totalItems) * 100;
   const mobilePass = (mobileAudit.passedItems / mobileAudit.totalItems) * 100;
 
-  const overallScore = Math.round(
-    (codeServerPass * 0.35 + contentPass * 0.25 + mobilePass * 0.15 + desktopScore * 0.15 + mobileScore * 0.10)
-  );
+  // 调整权重，如果缺少 Speed 数据，权重分摊到其他项
+  let overallScore;
+  if (speedData) {
+      overallScore = Math.round(
+        (codeServerPass * 0.35 + contentPass * 0.25 + mobilePass * 0.15 + desktopScore * 0.15 + mobileScore * 0.10)
+      );
+  } else {
+      // 降级模式：仅计算基础项
+      overallScore = Math.round(
+        (codeServerPass * 0.50 + contentPass * 0.30 + mobilePass * 0.20)
+      );
+  }
 
   return {
     overall: overallScore,
-    desktop: Math.round(desktopScore),
-    mobile: Math.round(mobileScore),
+    desktop: speedData ? Math.round(desktopScore) : 0,
+    mobile: speedData ? Math.round(mobileScore) : 0,
     codeServer: Math.round(codeServerPass),
     content: Math.round(contentPass),
     mobileCompatibility: Math.round(mobilePass),
@@ -482,20 +586,21 @@ const calculateOverallScore = (codeServerAudit, contentAudit, mobileAudit, speed
       '程序代码、服务器': codeServerPass.toFixed(1) + '%',
       '网站内容': contentPass.toFixed(1) + '%',
       '手机端': mobilePass.toFixed(1) + '%',
-      '桌面端性能': desktopScore.toFixed(1),
-      '移动端性能': mobileScore.toFixed(1)
+      '桌面端性能': speedData ? desktopScore.toFixed(1) : 'N/A',
+      '移动端性能': speedData ? mobileScore.toFixed(1) : 'N/A'
     }
   };
 };
 
 /**
- * 7. 生成审计总结
+ * 8. 生成审计总结
  */
-const generateSummary = (codeServerAudit, contentAudit, mobileAudit, overallScore) => {
+const generateSummary = (codeServerAudit, contentAudit, mobileAudit, aiAudit, overallScore) => {
   const allItems = [
     ...codeServerAudit.items,
     ...contentAudit.items,
-    ...mobileAudit.items
+    ...mobileAudit.items,
+    ...aiAudit.items
   ];
 
   const criticalIssues = allItems.filter(i => i.priority === 'critical' && i.status === 'fail');
@@ -513,8 +618,8 @@ const generateSummary = (codeServerAudit, contentAudit, mobileAudit, overallScor
     recommendations: [
       criticalIssues.length > 0 ? `立即修复 ${criticalIssues.length} 个严重问题` : null,
       highIssues.length > 0 ? `优先处理 ${highIssues.length} 个高优先级问题` : null,
-      overallScore.desktop < 80 ? '优化桌面端性能，目标80分以上' : null,
-      overallScore.mobile < 50 ? '改善移动端体验，目标50分以上' : null
+      overallScore.desktop < 80 && overallScore.desktop > 0 ? '优化桌面端性能，目标80分以上' : null,
+      !overallScore.desktop ? '配置 PageSpeed API 以获取性能评分' : null
     ].filter(Boolean)
   };
 };
@@ -532,10 +637,20 @@ const checkRobotsTxt = async (domain) => {
                        text.toLowerCase().includes('claude-web');
       return { exists: true, content: text, allowsAI };
     }
-    return { exists: false, allowsAI: false };
+    return { exists: false, allowsAI: false, content: '' };
   } catch (e) {
-    return { exists: false, allowsAI: false };
+    return { exists: false, allowsAI: false, content: '' };
   }
+};
+
+const checkLLMsTxt = async (domain) => {
+    try {
+      const url = new URL('/llms.txt', domain).href;
+      const response = await fetch(url);
+      return { exists: response.ok };
+    } catch (e) {
+      return { exists: false };
+    }
 };
 
 const checkSitemap = async (domain) => {
@@ -562,6 +677,11 @@ const checkSchema = (html) => {
     try {
       const json = JSON.parse(match.replace(/<\/?script[^>]*>/g, ''));
       if (json['@type']) types.add(json['@type']);
+      if (json['@graph']) {
+          json['@graph'].forEach(item => {
+              if(item['@type']) types.add(item['@type']);
+          });
+      }
     } catch (e) {}
   });
   
@@ -628,7 +748,7 @@ const checkDeadLinks = async (links) => {
   return { count: 0, total: externalLinks.length }; // Mock: 实际需要逐个请求
 };
 
-const analyzeKeywordDensity = (markdown, title) => {
+const analyzeKeywordDensity = (markdown, title, html) => {
   const words = markdown.toLowerCase().match(/\b[a-z]{3,}\b/g) || [];
   const frequency = {};
   words.forEach(word => {
@@ -638,8 +758,11 @@ const analyzeKeywordDensity = (markdown, title) => {
   const sorted = Object.entries(frequency).sort((a, b) => b[1] - a[1]);
   const topKeywords = sorted.slice(0, 5).map(([word]) => word);
   
+  // 检查是否使用了 strong 标签
+  const hasStrong = html.includes('<strong>') || html.includes('<b>');
+
   return {
-    isOptimal: true, // 简化判断
+    isOptimal: hasStrong, // 增强检查：必须有 strong 标签
     topKeywords
   };
 };
@@ -655,19 +778,6 @@ const checkMultimedia = (html) => {
     videoCount
   };
 };
-
-// Mock 数据生成函数
-const getMockPageData = (domain) => ({
-  html: '<html><head><title>Mock Page</title></head><body><h1>Test</h1><p>Content here</p></body></html>',
-  markdown: 'Test content with some words to analyze.',
-  metadata: { title: 'Mock Page Title', description: 'Mock description for testing purposes.' },
-  links: [domain, `${domain}/about`, `${domain}/contact`]
-});
-
-const getMockSpeedData = () => ({
-  desktop: { score: 75, fcp: '1.2s', lcp: '2.5s', ttfb: '0.5s', cls: '0.1' },
-  mobile: { score: 55, fcp: '2.0s', lcp: '4.0s', ttfb: '0.8s', cls: '0.15' }
-});
 
 // ============== 历史记录管理（保持不变）==============
 
@@ -785,7 +895,7 @@ export const exportToCsv = (result) => {
   const rows = [];
   
   Object.values(result.sections).forEach(section => {
-    if (section.items) {
+    if (section && section.items) {
       section.items.forEach(item => {
         rows.push([
           section.title,
