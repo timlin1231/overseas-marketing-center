@@ -21,6 +21,7 @@ import {
 import { Link } from 'react-router-dom';
 import { getRepoContent, getFileContent, putFile, deleteFile, deleteDirectory, createDirectory } from './GitHubService';
 import DailyFlow from './components/DailyFlow/DailyFlow';
+import TopicFlow from './components/TopicFlow/TopicFlow';
 import RichEditor from './components/RichEditor';
 import { ConfirmModal, InputModal } from './components/Modals';
 
@@ -122,7 +123,8 @@ const Toast = ({ message, type, onClose }) => {
 
 const KnowledgeBase = () => {
   const [selectedFile, setSelectedFile] = useState(null);
-  const [viewMode, setViewMode] = useState('daily'); // 'daily' | 'editor'
+  const [viewMode, setViewMode] = useState('daily'); // 'daily' | 'topic' | 'editor'
+  const [activeTopic, setActiveTopic] = useState(null); // { title, path }
   
   const [fileSystem, setFileSystem] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -297,6 +299,7 @@ const KnowledgeBase = () => {
     if (file.type === 'folder') return;
     
     setViewMode('editor');
+    setActiveTopic(null);
     setSelectedFile({ ...file, content: 'Loading...' });
     setFileContentLoading(true);
     setTocItems([]);
@@ -413,6 +416,7 @@ const KnowledgeBase = () => {
               className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer ${viewMode === 'daily' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
               onClick={() => {
                 setViewMode('daily');
+                setActiveTopic(null);
                 setSelectedFile(null);
               }}
             >
@@ -421,16 +425,24 @@ const KnowledgeBase = () => {
             </div>
 
             <div
-              className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer ${selectedFile?.path === 'Projectkickoff.md' && viewMode === 'editor' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-              onClick={() => handleSelectFile({ name: 'Projectkickoff.md', path: 'Projectkickoff.md', type: 'file' })}
+              className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer ${viewMode === 'topic' && activeTopic?.path === 'Projectkickoff.md' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+              onClick={() => {
+                setViewMode('topic');
+                setActiveTopic({ title: 'Projectkickoff', path: 'Projectkickoff.md' });
+                setSelectedFile(null);
+              }}
             >
               <FileText size={16} className="mr-2 text-orange-500" />
               Projectkickoff
             </div>
 
             <div
-              className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer ${selectedFile?.path === 'todolist.md' && viewMode === 'editor' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
-              onClick={() => handleSelectFile({ name: 'todolist.md', path: 'todolist.md', type: 'file' })}
+              className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer ${viewMode === 'topic' && activeTopic?.path === 'todolist.md' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+              onClick={() => {
+                setViewMode('topic');
+                setActiveTopic({ title: 'todolist', path: 'todolist.md' });
+                setSelectedFile(null);
+              }}
             >
               <FileText size={16} className="mr-2 text-green-500" />
               todolist
@@ -514,9 +526,11 @@ const KnowledgeBase = () => {
       {/* Main Content: Daily Flow or Editor */}
       <div className="flex-1 flex flex-col h-full overflow-hidden bg-gray-50 dark:bg-gray-900">
         {viewMode === 'daily' ? (
-            <DailyFlow />
+          <DailyFlow />
+        ) : viewMode === 'topic' ? (
+          <TopicFlow title={activeTopic?.title || ''} path={activeTopic?.path || ''} />
         ) : (
-            <div className="flex-1 flex flex-col h-full overflow-hidden">
+          <div className="flex-1 flex flex-col h-full overflow-hidden">
                 {/* Editor Header */}
                 <header className="h-12 border-b border-gray-200 dark:border-gray-800 flex items-center px-4 justify-between bg-white dark:bg-gray-900">
                   <div className="flex items-center">
@@ -559,7 +573,7 @@ const KnowledgeBase = () => {
                       </div>
                     )}
                 </div>
-            </div>
+          </div>
         )}
       </div>
     </div>
