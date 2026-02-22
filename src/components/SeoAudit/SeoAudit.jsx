@@ -107,11 +107,14 @@ const SeoAudit = () => {
 
   // Load history on mount
   useEffect(() => {
-    const savedHistory = getAuditHistory();
-    setHistory(savedHistory);
-    // Extract unique recent domains
-    const unique = [...new Set(savedHistory.map(h => h.domain))].slice(0, 3);
-    setRecentDomains(unique);
+    const loadHistory = async () => {
+      const savedHistory = await getAuditHistory();
+      setHistory(savedHistory);
+      // Extract unique recent domains
+      const unique = [...new Set(savedHistory.map(h => h.domain))].slice(0, 3);
+      setRecentDomains(unique);
+    };
+    loadHistory();
   }, []);
 
   const validateDomain = (input) => {
@@ -157,8 +160,8 @@ const SeoAudit = () => {
       setProgress(5);
       setResult(data);
       
-      // Save to history
-      const newHistory = saveAuditResult(data);
+      // Save to history (now async)
+      const newHistory = await saveAuditResult(data);
       setHistory(newHistory);
       setRecentDomains([...new Set(newHistory.map(h => h.domain))].slice(0, 3));
       
@@ -174,9 +177,9 @@ const SeoAudit = () => {
     }
   };
 
-  const handleDeleteHistory = (timestamp) => {
+  const handleDeleteHistory = async (timestamp) => {
     if (window.confirm('确定要删除这条记录吗？')) {
-      const newHistory = deleteAuditRecord(timestamp);
+      const newHistory = await deleteAuditRecord(timestamp);
       setHistory(newHistory);
     }
   };
