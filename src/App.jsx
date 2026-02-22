@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { BookOpen, Globe, Bot, Moon, Sun, Lock, ArrowRight, Users } from 'lucide-react';
+import { BookOpen, Globe, Bot, Moon, Sun, Lock, ArrowRight, Users, Activity } from 'lucide-react';
 import KnowledgeBase from './KnowledgeBase';
+import SeoAudit from './components/SeoAudit/SeoAudit';
 
 function Home() {
   const [darkMode, setDarkMode] = useState(false);
@@ -30,6 +31,15 @@ function Home() {
     },
     {
       id: 2,
+      title: 'SEO 深度审计工具',
+      description: '一键诊断站点 SEO 健康度，提供专业优化建议与报告导出。',
+      icon: <Activity className="w-8 h-8 text-green-500" />,
+      active: true,
+      link: '/seo-audit',
+      statusText: 'NEW'
+    },
+    {
+      id: 3,
       title: 'GEO 内容生产 Agent',
       description: '自动生成针对不同国家/地区的本地化营销内容。',
       icon: <Globe className="w-8 h-8 text-gray-400" />,
@@ -37,7 +47,7 @@ function Home() {
       statusText: '开发中'
     },
     {
-      id: 3,
+      id: 4,
       title: '市场自动化信息收集 Agent',
       description: '全网监控竞品动态、行业趋势与关键词排名。',
       icon: <Bot className="w-8 h-8 text-gray-400" />,
@@ -45,7 +55,7 @@ function Home() {
       statusText: '规划中'
     },
     {
-      id: 4,
+      id: 5,
       title: 'AI CRM Agent',
       description: '智能化客户关系管理，自动跟进销售线索与邮件回复。',
       icon: <Users className="w-8 h-8 text-gray-400" />,
@@ -53,7 +63,7 @@ function Home() {
       statusText: '规划中'
     },
     {
-      id: 5,
+      id: 6,
       title: '更多 Agent 敬请期待',
       description: '......',
       icon: <Lock className="w-8 h-8 text-gray-300" />,
@@ -157,6 +167,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/knowledge-base" element={<KnowledgeBase />} />
+        <Route path="/seo-audit" element={<SeoAudit />} />
       </Routes>
     </Router>
   );
