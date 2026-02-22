@@ -912,3 +912,148 @@ const checkMultimedia = (html) => {
     videoCount
   };
 };
+
+// ============== 历史记录管理 ==============
+
+export const getAuditHistory = async () => {
+  try {
+    const files = await getRepoContent(AUDIT_RECORDS_DIR);
+    if (!files || files.length === 0) {
+      return migrateFromLocalStorage();
+    }
+
+    const records = [];
+    for (const file of files) {
+      if (file.type === 'file' && file.name.endsWith('.json')) {
+        try {
+          const content = await getFileContent(file.path);
+          if (content && content.content) {
+            const record = JSON.parse(content.content);
+            records.push(record);
+          }
+        } catch (e) {
+          console.error(`Failed to load ${file.name}:`, e);
+        }
+      }
+    }
+
+    return records.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  } catch (e) {
+    console.error('Failed to load history from GitHub:', e);
+    return getLocalHistory();
+  }
+};
+
+const migrateFromLocalStorage = async () => {
+  const localHistory = getLocalHistory();
+  if (localHistory.length === 0) return [];
+
+  console.log('Migrating audit history from localStorage to GitHub...');
+  
+  for (const record of localHistory) {
+    try {
+      await saveToGitHub(record);
+    } catch (e) {
+      console.error('Migration failed for record:', e);
+    }
+  }
+
+  return localHistory;
+};
+
+const getLocalHistory = () => {
+  try {
+    const history = localStorage.getItem('seo_audit_history');
+    return history ? JSON.parse(history) : [];
+  } catch (e) {
+    console.error('Failed to parse localStorage history', e);
+    return [];
+  }
+};
+
+const saveToGitHub = async (result) => {
+  const sanitizedDomain = result.domain.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const timestamp = new Date(result.timestamp).getTime();
+  const filename = `${sanitizedDomain}_${timestamp}.json`;
+  const filePath = `${AUDIT_RECORDS_DIR}/${filename}`;
+
+  const content = JSON.stringify(result, null, 2);
+  await putFile(filePath, content, `Add SEO audit record for ${result.domain}`);
+};
+
+export const saveAuditResult = async (result) => {
+  try {
+    await saveToGitHub(result);
+
+    const localHistory = getLocalHistory();
+    const newHistory = [result, ...localHistory].slice(0, 20);
+    localStorage.setItem('seo_audit_history', JSON.stringify(newHistory));
+
+    return await getAuditHistory();
+  } catch (e) {
+    console.error('Failed to save to GitHub:', e);
+    const localHistory = getLocalHistory();
+    const newHistory = [result, ...localHistory].slice(0, 20);
+    localStorage.setItem('seo_audit_history', JSON.stringify(newHistory));
+    return newHistory;
+  }
+};
+
+export const deleteAuditRecord = async (timestamp) => {
+    try {
+      const files = await getRepoContent(AUDIT_RECORDS_DIR);
+      if (files) {
+        for (const file of files) {
+          if (file.type === 'file' && file.name.includes(new Date(timestamp).getTime().toString())) {
+             console.log(`Skipping GitHub deletion for ${file.name} (not implemented)`);
+          }
+        }
+      }
+
+      const localHistory = getLocalHistory();
+      const newHistory = localHistory.filter(item => item.timestamp !== timestamp);
+      localStorage.setItem('seo_audit_history', JSON.stringify(newHistory));
+
+      return await getAuditHistory(); 
+    } catch (e) {
+      console.error('Failed to delete from GitHub:', e);
+      const localHistory = getLocalHistory();
+      const newHistory = localHistory.filter(item => item.timestamp !== timestamp);
+      localStorage.setItem('seo_audit_history', JSON.stringify(newHistory));
+      return newHistory;
+    }
+};
+
+export const exportToCsv = (result) => {
+  const headers = ['Section', 'Category', 'Status', 'Issue', 'Suggestion', 'Priority'];
+  const rows = [];
+  
+  Object.values(result.sections).forEach(section => {
+    if (section && section.items) {
+      section.items.forEach(item => {
+        rows.push([
+          section.title,
+          item.category,
+          item.status,
+          item.issue || '-',
+          item.suggestion,
+          item.priority
+        ]);
+      });
+    }
+  });
+
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(r => r.map(c => `"${c}"`).join(','))
+  ].join('\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `seo_audit_${result.domain.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
