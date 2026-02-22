@@ -95,7 +95,7 @@ const MetricCard = ({ title, value, icon, subtext }) => {
   );
 };
 
-// Traffic Detail Component
+// Traffic Detail Component (Updated Style)
 const TrafficSection = ({ data }) => {
     if (!data || !data.success || !data.data) return null;
 
@@ -107,9 +107,9 @@ const TrafficSection = ({ data }) => {
                         <TrendingUp size={20} />
                     </div>
                     <div>
-                        <h3 className="text-lg font-bold">流量估算</h3>
+                        <h3 className="text-lg font-bold">网站流量分析</h3>
                         <p className="text-xs text-gray-500">
-                            数据来源: {data.source} (仅供参考)
+                            数据来源: {data.source}
                         </p>
                     </div>
                 </div>
@@ -123,22 +123,22 @@ const TrafficSection = ({ data }) => {
                 </a>
             </div>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-6">
-                <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl text-center">
-                    <p className="text-xs text-gray-500 mb-1">总访问量</p>
-                    <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{data.data.totalVisits || '-'}</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-gray-100 dark:divide-gray-700">
+                <div className="p-6 text-center">
+                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">{data.data.totalVisits || '-'}</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">月访问量</p>
                 </div>
-                <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl text-center">
-                    <p className="text-xs text-gray-500 mb-1">跳出率</p>
-                    <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{data.data.bounceRate || '-'}</p>
+                <div className="p-6 text-center">
+                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">{data.data.bounceRate || '-'}</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">跳出率</p>
                 </div>
-                <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl text-center">
-                    <p className="text-xs text-gray-500 mb-1">每次访问页数</p>
-                    <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{data.data.pagesPerVisit || '-'}</p>
+                <div className="p-6 text-center">
+                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">{data.data.pagesPerVisit || '-'}</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">每次访问页数</p>
                 </div>
-                <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl text-center">
-                    <p className="text-xs text-gray-500 mb-1">平均访问时长</p>
-                    <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{data.data.avgDuration || '-'}</p>
+                <div className="p-6 text-center">
+                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">{data.data.avgDuration || '-'}</p>
+                    <p className="text-xs text-gray-500 uppercase tracking-wide">平均访问时长</p>
                 </div>
             </div>
         </div>
@@ -508,7 +508,12 @@ const SeoAudit = () => {
                   />
                 </div>
 
-                {/* 2. Summary & Top Issues */}
+                {/* 2. Traffic Analysis (Prominent Position) */}
+                {result.sections?.traffic && (
+                    <TrafficSection data={result.sections?.traffic} />
+                )}
+
+                {/* 3. Summary & Top Issues */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="col-span-2 bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-100 dark:border-gray-700">
                     <h3 className="text-lg font-bold mb-4 flex items-center">
@@ -590,10 +595,6 @@ const SeoAudit = () => {
                     icon={Bot} 
                     data={result.sections?.ai} 
                   />
-
-                  {result.sections?.traffic && (
-                    <TrafficSection data={result.sections?.traffic} />
-                  )}
                 </div>
 
               </div>
