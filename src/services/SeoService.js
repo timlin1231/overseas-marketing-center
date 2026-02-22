@@ -626,46 +626,70 @@ const generateSummary = (codeServerAudit, contentAudit, mobileAudit, aiAudit, ov
 
 // ============== 辅助函数 ==============
 
-const checkRobotsTxt = async (domain) => {
+const checkFileWithFallback = async (domain, filename) => {
+  // 1. 尝试原始域名
+  let url = new URL(filename, domain).href;
   try {
-    const url = new URL('/robots.txt', domain).href;
-    const response = await fetch(url);
-    if (response.ok) {
+    let response = await fetch(url);
+    const contentType = response.headers.get('content-type') || '';
+    
+    // 如果返回 OK 且不是 HTML (可能是重定向到了首页)
+    if (response.ok && !contentType.includes('text/html')) {
       const text = await response.text();
-      const allowsAI = !text.toLowerCase().includes('disallow: /') || 
-                       text.toLowerCase().includes('gptbot') ||
-                       text.toLowerCase().includes('claude-web');
-      return { exists: true, content: text, allowsAI };
+      return { exists: true, content: text, url };
     }
-    return { exists: false, allowsAI: false, content: '' };
   } catch (e) {
-    return { exists: false, allowsAI: false, content: '' };
+    // ignore
   }
+
+  // 2. 尝试 www 或去 www
+  const urlObj = new URL(domain);
+  let altDomain;
+  if (urlObj.hostname.startsWith('www.')) {
+    altDomain = urlObj.hostname.replace('www.', '');
+  } else {
+    altDomain = `www.${urlObj.hostname}`;
+  }
+  
+  try {
+    const altUrl = new URL(filename, `${urlObj.protocol}//${altDomain}`).href;
+    const response = await fetch(altUrl);
+    const contentType = response.headers.get('content-type') || '';
+
+    if (response.ok && !contentType.includes('text/html')) {
+      const text = await response.text();
+      return { exists: true, content: text, url: altUrl };
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  return { exists: false, content: '', url: '' };
+};
+
+const checkRobotsTxt = async (domain) => {
+  const result = await checkFileWithFallback(domain, '/robots.txt');
+  if (result.exists) {
+    const allowsAI = !result.content.toLowerCase().includes('disallow: /') || 
+                     result.content.toLowerCase().includes('gptbot') ||
+                     result.content.toLowerCase().includes('claude-web');
+    return { exists: true, content: result.content, allowsAI };
+  }
+  return { exists: false, allowsAI: false, content: '' };
 };
 
 const checkLLMsTxt = async (domain) => {
-    try {
-      const url = new URL('/llms.txt', domain).href;
-      const response = await fetch(url);
-      return { exists: response.ok };
-    } catch (e) {
-      return { exists: false };
-    }
+  const result = await checkFileWithFallback(domain, '/llms.txt');
+  return { exists: result.exists };
 };
 
 const checkSitemap = async (domain) => {
-  try {
-    const url = new URL('/sitemap.xml', domain).href;
-    const response = await fetch(url);
-    if (response.ok) {
-      const text = await response.text();
-      const urlMatches = text.match(/<url>/g);
-      return { exists: true, urlCount: urlMatches ? urlMatches.length : 0 };
-    }
-    return { exists: false, urlCount: 0 };
-  } catch (e) {
-    return { exists: false, urlCount: 0 };
+  const result = await checkFileWithFallback(domain, '/sitemap.xml');
+  if (result.exists) {
+    const urlMatches = result.content.match(/<url>/g);
+    return { exists: true, urlCount: urlMatches ? urlMatches.length : 0 };
   }
+  return { exists: false, urlCount: 0 };
 };
 
 const checkSchema = (html) => {
