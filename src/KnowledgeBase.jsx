@@ -21,7 +21,7 @@ import {
 import { Link } from 'react-router-dom';
 import { getRepoContent, getFileContent, putFile, deleteFile, deleteDirectory, createDirectory } from './GitHubService';
 import DailyFlow from './components/DailyFlow/DailyFlow';
-import TopicFlow from './components/TopicFlow/TopicFlow';
+import SingleFileCardFlow from './components/TopicFlow/SingleFileCardFlow';
 import RichEditor from './components/RichEditor';
 import { ConfirmModal, InputModal } from './components/Modals';
 
@@ -528,7 +528,7 @@ const KnowledgeBase = () => {
         {viewMode === 'daily' ? (
           <DailyFlow />
         ) : viewMode === 'topic' ? (
-          <TopicFlow title={activeTopic?.title || ''} path={activeTopic?.path || ''} />
+          <SingleFileCardFlow title={activeTopic?.title || ''} path={activeTopic?.path || ''} />
         ) : (
           <div className="flex-1 flex flex-col h-full overflow-hidden">
                 {/* Editor Header */}

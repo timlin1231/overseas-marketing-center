@@ -13,7 +13,7 @@ const sanitizeDailyContent = (raw, dateStr) => {
   return text.trim();
 };
 
-const DailyCard = ({ note, onUpdate }) => {
+const DailyCard = ({ note, onUpdate, onSave }) => {
   const date = new Date(note.date);
   const dayOfWeek = date.toLocaleDateString('zh-CN', { weekday: 'long' });
   const isToday = new Date().toDateString() === date.toDateString();
@@ -42,22 +42,28 @@ const DailyCard = ({ note, onUpdate }) => {
 
     setIsSaving(true);
     try {
-      const latest = await getFileContent(note.path);
-      const shaToUse = latest?.sha || note.sha;
-      const result = await putFile(note.path, next, `Update daily note ${note.date}`, shaToUse);
+      if (onSave) {
+          // Controlled mode: Delegate save to parent
+          await onSave(next);
+      } else {
+          // Default mode: Save to file path in note
+          const latest = await getFileContent(note.path);
+          const shaToUse = latest?.sha || note.sha;
+          const result = await putFile(note.path, next, `Update daily note ${note.date}`, shaToUse);
+          if (onUpdate) {
+            onUpdate({ ...note, content: next, sha: result.content.sha, isNew: false });
+          }
+      }
       lastSavedRef.current = next;
       setContent(next);
       setIsDirty(false);
-      if (onUpdate) {
-        onUpdate({ ...note, content: next, sha: result.content.sha, isNew: false });
-      }
     } catch (error) {
       console.error('Save failed:', error);
       alert('保存失败: ' + error.message);
     } finally {
       setIsSaving(false);
     }
-  }, [content, note.date, note.path, note.sha, onUpdate]);
+  }, [content, note.date, note.path, note.sha, onUpdate, onSave]);
 
   useEffect(() => {
     if (!isExpanded) return;
