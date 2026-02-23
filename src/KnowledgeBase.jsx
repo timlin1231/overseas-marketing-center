@@ -447,6 +447,29 @@ const KnowledgeBase = () => {
               <FileText size={16} className="mr-2 text-green-500" />
               todolist
             </div>
+
+            {/* 常驻 SEO Audit Reports 文件夹 */}
+            <div
+                className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800`}
+                onClick={() => {
+                    // Find the SEO-Audits folder in fileSystem
+                    const seoFolder = fileSystem.find(f => f.name === 'SEO-Audits' && f.type === 'folder');
+                    if (seoFolder) {
+                        // Expand it by selecting/toggling
+                        // Since FileTree handles toggle internally via onSelect if we pass logic,
+                        // but here we are outside FileTree.
+                        // We can just open the file manager and let user browse, 
+                        // OR we can implement a specific view for it.
+                        // For now, let's just ensure File Manager is open.
+                        setManageOpen(true);
+                    } else {
+                        showToast('暂无 SEO 审计报告', 'info');
+                    }
+                }}
+            >
+                <Folder size={16} className="mr-2 text-purple-500" />
+                SEO Audit Reports
+            </div>
           </div>
 
           <div className="mt-6">
