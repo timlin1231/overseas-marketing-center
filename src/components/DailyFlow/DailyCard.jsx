@@ -18,7 +18,11 @@ const DailyCard = ({ note, onUpdate, onSave }) => {
   const dayOfWeek = date.toLocaleDateString('zh-CN', { weekday: 'long' });
   const isToday = new Date().toDateString() === date.toDateString();
 
-  const [isExpanded, setIsExpanded] = useState(isToday); // 仅今天默认展开
+  const [isExpanded, setIsExpanded] = useState(() => {
+    const sanitized = sanitizeDailyContent(note.content || '', note.date);
+    return isToday || sanitized.length > 0;
+  });
+  
   const initialContent = useMemo(() => sanitizeDailyContent(note.content || '', note.date), [note.content, note.date]);
   const [content, setContent] = useState(initialContent);
   const [isSaving, setIsSaving] = useState(false);

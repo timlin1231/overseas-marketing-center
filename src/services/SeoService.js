@@ -15,6 +15,7 @@ import { getFileContent, putFile, getRepoContent } from '../GitHubService';
 const FIRECRAWL_API_KEY = import.meta.env.VITE_FIRECRAWL_API_KEY;
 const PAGESPEED_API_KEY = import.meta.env.VITE_PAGESPEED_API_KEY; // Google PageSpeed Insights API Key
 const AUDIT_RECORDS_DIR = 'SEO-Audit-Records';
+const AUDIT_MD_DIR = 'SEO-Audits'; // User-facing Markdown reports
 
 /**
  * 核心审计函数 - 执行完整的 SEO 技术审计
@@ -990,9 +991,83 @@ const saveToGitHub = async (result) => {
   await putFile(filePath, content, `Add SEO audit record for ${result.domain}`);
 };
 
+const saveToMarkdown = async (result) => {
+    const domain = result.domain.replace(/^https?:\/\//, '').replace(/\/$/, '').replace(/[^a-zA-Z0-9.-]/g, '_');
+    const dateStr = new Date(result.timestamp).toISOString().split('T')[0];
+    const filename = `${domain}_${dateStr}.md`;
+    const filePath = `${AUDIT_MD_DIR}/${filename}`;
+
+    let md = `# SEO Audit Report: ${result.domain}\n\n`;
+    md += `**Date:** ${new Date(result.timestamp).toLocaleString()}\n`;
+    md += `**Overall Score:** ${result.overallScore.overall}/100\n\n`;
+    
+    // Overview Table
+    md += `## 📊 Overview\n\n`;
+    md += `| Category | Score | Status |\n`;
+    md += `| --- | --- | --- |\n`;
+    md += `| Desktop Perf | ${result.overallScore.desktop} | ${result.overallScore.desktop >= 90 ? '🟢' : result.overallScore.desktop >= 50 ? '🟡' : '🔴'} |\n`;
+    md += `| Mobile Perf | ${result.overallScore.mobile} | ${result.overallScore.mobile >= 90 ? '🟢' : result.overallScore.mobile >= 50 ? '🟡' : '🔴'} |\n`;
+    md += `| Tech Health | ${result.overallScore.codeServer} | ${result.overallScore.codeServer >= 80 ? '🟢' : '🔴'} |\n`;
+    md += `| Content | ${result.overallScore.content} | ${result.overallScore.content >= 80 ? '🟢' : '🔴'} |\n\n`;
+
+    // Traffic
+    if (result.sections.traffic && result.sections.traffic.data) {
+        const t = result.sections.traffic.data;
+        md += `## 📈 Traffic Analysis (${result.sections.traffic.source})\n\n`;
+        md += `- **Global Rank:** #${t.globalRank || '-'}\n`;
+        md += `- **Total Visits:** ${t.totalVisits || '-'}\n`;
+        md += `- **Bounce Rate:** ${t.bounceRate || '-'}\n`;
+        md += `- **Pages/Visit:** ${t.pagesPerVisit || '-'}\n`;
+        md += `- **Avg Duration:** ${t.avgDuration || '-'}\n\n`;
+    }
+
+    // Key Issues
+    md += `## 🚨 Key Issues\n\n`;
+    if (result.summary.topIssues && result.summary.topIssues.length > 0) {
+        result.summary.topIssues.forEach(issue => {
+            md += `- **[${(issue.priority || 'medium').toUpperCase()}]** ${issue.category}: ${issue.issue}\n`;
+        });
+    } else {
+        md += `No critical issues found.\n`;
+    }
+    md += `\n`;
+
+    // Sections
+    const renderSection = (title, data) => {
+        if (!data || !data.items) return '';
+        let sectionMd = `## ${title}\n\n`;
+        sectionMd += `**Passed:** ${data.passedItems}/${data.totalItems}\n\n`;
+        
+        data.items.forEach(item => {
+            const icon = item.status === 'pass' ? '✅' : item.status === 'warning' ? '⚠️' : item.status === 'info' ? 'ℹ️' : '❌';
+            sectionMd += `### ${icon} ${item.category}\n\n`;
+            sectionMd += `- **Status:** ${item.status.toUpperCase()}\n`;
+            if (item.priority) sectionMd += `- **Priority:** ${item.priority}\n`;
+            sectionMd += `- **Current State:** ${item.currentState}\n`;
+            if (item.status !== 'pass') {
+                sectionMd += `- **Issue:** ${item.issue}\n`;
+                sectionMd += `- **Fix:** ${item.suggestion}\n`;
+            }
+            sectionMd += `\n`;
+        });
+        return sectionMd;
+    };
+
+    md += renderSection('Code & Server', result.sections.codeServer);
+    md += renderSection('Content', result.sections.content);
+    md += renderSection('Mobile', result.sections.mobile);
+    md += renderSection('AI Readiness', result.sections.ai);
+
+    await putFile(filePath, md, `Add SEO Audit Report (Markdown) for ${result.domain}`);
+};
+
 export const saveAuditResult = async (result) => {
   try {
+    // 1. Save JSON Record (Internal use)
     await saveToGitHub(result);
+    
+    // 2. Save Markdown Report (User visible in Knowledge Base)
+    await saveToMarkdown(result);
 
     const localHistory = getLocalHistory();
     const newHistory = [result, ...localHistory].slice(0, 20);
