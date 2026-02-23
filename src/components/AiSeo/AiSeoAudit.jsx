@@ -23,7 +23,7 @@ import {
   XCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { performAiSeoAnalysis } from '../../services/AiSeoService';
+import { performAiSeoAnalysis, getAiAuditHistory } from '../../services/AiSeoService';
 import { useTask } from '../../context/TaskContext';
 
 // --- Reusable Components (Vercel Style) ---
@@ -369,22 +369,19 @@ const BotAccessSection = ({ data }) => {
 // --- Main Page ---
 
 const AiSeoAudit = () => {
-  const { 
-    aiAuditState, 
-    updateAiAudit, 
-    refreshAiHistory 
-  } = useTask();
+  const { aiAudit, updateAiAudit } = useTask();
+  const { result, loading, error } = aiAudit;
   
-  const { loading, result, error, domain, history } = aiAuditState;
+  const [url, setUrl] = useState('');
+  const [historyRecords, setHistoryRecords] = useState([]);
 
   const handleAnalyze = async (e) => {
     e?.preventDefault();
-    if (!domain.trim()) return;
+    if (!url.trim()) return;
 
-    let targetDomain = domain.trim();
+    let targetDomain = url.trim();
     if (!targetDomain.startsWith('http')) {
       targetDomain = `https://${targetDomain}`;
-      updateAiAudit({ domain: targetDomain });
     }
 
     updateAiAudit({ loading: true, error: null, result: null });
@@ -447,17 +444,13 @@ const AiSeoAudit = () => {
                             item.score >= 80 ? 'text-green-600' : item.score >= 50 ? 'text-yellow-600' : 'text-red-600'
                         }`}>
                             {item.score}
-                        </span>
+                            </span>
+                        </div>
                     </div>
-                </div>
-            ))}
-            {history.length === 0 && (
-                <div className="p-4 text-center text-xs text-gray-400">
-                    暂无历史记录
-                </div>
-            )}
-        </div>
-      </div>
+                ))
+             )}
+         </div>
+       </div>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
@@ -491,8 +484,8 @@ const AiSeoAudit = () => {
                         </div>
                         <input
                             type="text"
-                            value={domain}
-                            onChange={(e) => updateAiAudit({ domain: e.target.value, error: null })}
+                            value={url}
+                            onChange={(e) => setUrl(e.target.value)}
                             placeholder="输入网址 (例如 https://example.com/blog/post)"
                             disabled={loading}
                             className="w-full pl-12 pr-4 py-3 text-base bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg shadow-sm focus:ring-2 focus:ring-black dark:focus:ring-white focus:border-transparent outline-none transition-all"
