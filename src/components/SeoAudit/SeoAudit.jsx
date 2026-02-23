@@ -108,9 +108,17 @@ const TrafficSection = ({ data }) => {
                     </div>
                     <div>
                         <h3 className="text-lg font-bold">网站流量分析</h3>
-                        <p className="text-xs text-gray-500">
-                            数据来源: {data.source}
-                        </p>
+                        <div className="flex flex-col">
+                            <p className="text-xs text-gray-500">
+                                数据来源: {data.source}
+                            </p>
+                            {data.message && (
+                                <p className="text-xs text-amber-500 mt-0.5 flex items-center">
+                                    <AlertTriangle size={10} className="mr-1" />
+                                    {data.message}
+                                </p>
+                            )}
+                        </div>
                     </div>
                 </div>
                 <a 

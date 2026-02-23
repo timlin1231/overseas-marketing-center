@@ -205,6 +205,8 @@ const auditTraffic = async (domain) => {
             const pagesPerVisitMatch = markdown.match(/Pages per Visit\s*([\d.]+)/i);
             const avgDurationMatch = markdown.match(/Avg Visit Duration\s*([\d:]+)/i);
 
+            const isSuccess = !!totalVisitsMatch;
+            
             return {
                 source: 'SimilarWeb (Public)',
                 url: similarWebUrl,
@@ -214,7 +216,8 @@ const auditTraffic = async (domain) => {
                     pagesPerVisit: pagesPerVisitMatch ? pagesPerVisitMatch[1] : 'N/A',
                     avgDuration: avgDurationMatch ? avgDurationMatch[1] : 'N/A'
                 },
-                success: !!totalVisitsMatch
+                success: true, // Always show section, even if data is N/A
+                message: isSuccess ? '' : '无法从公开页面提取数据，可能流量较低或需要登录。'
             };
         }
     } catch (e) {
@@ -224,9 +227,14 @@ const auditTraffic = async (domain) => {
     return {
         source: 'SimilarWeb',
         url: similarWebUrl,
-        data: null,
-        success: false,
-        message: '无法获取免费流量数据，可能被反爬虫拦截或需要 API Key。'
+        data: {
+            totalVisits: 'N/A',
+            bounceRate: 'N/A',
+            pagesPerVisit: 'N/A',
+            avgDuration: 'N/A'
+        },
+        success: true, // Force true to ensure UI renders
+        message: '无法获取免费流量数据，可能流量过低或被拦截。'
     };
 };
 
