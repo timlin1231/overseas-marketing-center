@@ -1,4 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
+import { useTask } from '../../context/TaskContext';
 import { 
   Search, 
   Activity, 
@@ -58,8 +60,6 @@ const Card = ({ children, className = '' }) => (
   </motion.div>
 );
 
-// --- Sub-Components ---
-
 const ProgressStep = ({ currentStep }) => {
   const steps = ['DNS', 'Server', 'Crawl', 'Content', 'Report'];
   const percentage = Math.min(((currentStep - 1) / (steps.length - 1)) * 100, 100);
@@ -95,7 +95,6 @@ const ProgressStep = ({ currentStep }) => {
 
 const MetricCard = ({ title, value, subtext, icon: Icon }) => {
   const numValue = parseInt(value);
-  // Subtle status indicator
   const statusColor = isNaN(numValue) 
     ? 'bg-gray-200' 
     : numValue >= 90 ? 'bg-green-500' 
@@ -263,23 +262,23 @@ const AuditSection = ({ title, icon: Icon, data, index }) => {
 };
 
 const SeoAudit = () => {
-  const [domain, setDomain] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [result, setResult] = useState(null);
-  const [history, setHistory] = useState([]);
-  const [error, setError] = useState(null);
+  const { 
+    seoAuditState, 
+    updateSeoAudit, 
+    refreshSeoHistory 
+  } = useTask();
+  
+  const { loading, progress, result, error, domain, history } = seoAuditState;
+  
   const [recentDomains, setRecentDomains] = useState([]);
 
   useEffect(() => {
-    const loadHistory = async () => {
-      const savedHistory = await getAuditHistory();
-      setHistory(savedHistory);
-      const unique = [...new Set(savedHistory.map(h => h.domain))].slice(0, 5);
-      setRecentDomains(unique);
-    };
-    loadHistory();
-  }, []);
+    // Only update recentDomains when history changes
+    if (history && history.length > 0) {
+        const unique = [...new Set(history.map(h => h.domain))].slice(0, 5);
+        setRecentDomains(unique);
+    }
+  }, [history]);
 
   const handleAudit = async (e) => {
     e?.preventDefault();
@@ -288,44 +287,57 @@ const SeoAudit = () => {
     let targetDomain = domain.trim();
     if (!targetDomain.startsWith('http')) {
       targetDomain = `https://${targetDomain}`;
-      setDomain(targetDomain);
+      updateSeoAudit({ domain: targetDomain });
     }
 
-    setError(null);
-    setLoading(true);
-    setResult(null);
-    setProgress(1);
+    updateSeoAudit({ loading: true, result: null, error: null, progress: 1 });
 
     const stepInterval = setInterval(() => {
-      setProgress(prev => (prev >= 4 ? 4 : prev + 1));
+        // Only update progress if still loading
+        updateSeoAudit({ progress: Math.min(4, (seoAuditState.progress || 1) + 1) });
     }, 800);
 
     try {
       const data = await performSeoAudit(targetDomain);
-      setProgress(5);
-      setResult(data);
       
-      const newHistory = await saveAuditResult(data);
-      setHistory(newHistory);
-      setRecentDomains([...new Set(newHistory.map(h => h.domain))].slice(0, 5));
+      // Save result immediately
+      await saveAuditResult(data);
+      refreshSeoHistory(); // Refresh history list
+      
+      clearInterval(stepInterval);
+      updateSeoAudit({ 
+          loading: false, 
+          progress: 5, 
+          result: data 
+      });
       
       setTimeout(() => {
-        setLoading(false);
-        setProgress(0);
+        updateSeoAudit({ progress: 0 });
       }, 500);
+
     } catch (err) {
       clearInterval(stepInterval);
-      setLoading(false);
-      setProgress(0);
-      setError(err.message || 'Audit failed. Please try again.');
+      updateSeoAudit({ 
+          loading: false, 
+          progress: 0, 
+          error: err.message || 'Audit failed. Please try again.' 
+      });
     }
   };
 
   const handleDeleteHistory = async (timestamp) => {
     if (window.confirm('Delete this record?')) {
-      const newHistory = await deleteAuditRecord(timestamp);
-      setHistory(newHistory);
+      await deleteAuditRecord(timestamp);
+      refreshSeoHistory();
     }
+  };
+
+  const loadHistoryItem = (item) => {
+      updateSeoAudit({ 
+          result: item, 
+          domain: item.domain,
+          error: null 
+      });
   };
 
   return (
@@ -341,13 +353,13 @@ const SeoAudit = () => {
         
         <div className="flex-1 overflow-y-auto p-3 space-y-1">
           <div className="text-[10px] font-mono text-gray-400 uppercase tracking-widest px-2 mb-2 mt-2">History</div>
-          {history.length === 0 ? (
+          {!history || history.length === 0 ? (
             <div className="px-2 py-4 text-xs text-gray-400">No recent audits</div>
           ) : (
             history.map((item, idx) => (
               <div 
                 key={idx} 
-                onClick={() => setResult(item)}
+                onClick={() => loadHistoryItem(item)}
                 className={`group px-3 py-2.5 rounded-md cursor-pointer text-sm flex justify-between items-center transition-all ${
                   result && result.timestamp === item.timestamp
                     ? 'bg-white dark:bg-gray-900 shadow-sm text-black dark:text-white ring-1 ring-gray-200 dark:ring-gray-800'
@@ -441,8 +453,8 @@ const SeoAudit = () => {
                         type="text"
                         value={domain}
                         onChange={(e) => {
-                            setDomain(e.target.value);
-                            if (error) setError(null);
+                            updateSeoAudit({ domain: e.target.value });
+                            if (error) updateSeoAudit({ error: null });
                         }}
                         placeholder="Enter domain (e.g. vercel.com)"
                         disabled={loading}
@@ -471,7 +483,7 @@ const SeoAudit = () => {
                   {recentDomains.map(d => (
                     <button
                       key={d}
-                      onClick={() => setDomain(d)}
+                      onClick={() => updateSeoAudit({ domain: d })}
                       className="px-3 py-1 text-xs text-gray-500 border border-gray-200 dark:border-gray-800 rounded-full hover:border-gray-400 dark:hover:border-gray-600 hover:text-black dark:hover:text-white transition-colors"
                     >
                       {d.replace(/^https?:\/\//, '')}

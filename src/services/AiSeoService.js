@@ -2,9 +2,11 @@
 import { getFileContent, putFile, getRepoContent } from '../GitHubService';
 
 const FIRECRAWL_API_KEY = import.meta.env.VITE_FIRECRAWL_API_KEY;
+const AUDIT_RECORDS_DIR = 'SEO-Audit-Records';
+const AUDIT_MD_DIR = 'SEO-Audits';
 
 /**
- * 核心 AI SEO 分析函数
+ * 核心 AI SEO 审计函数
  */
 export const performAiSeoAnalysis = async (domain) => {
   const startTime = Date.now();
@@ -14,32 +16,38 @@ export const performAiSeoAnalysis = async (domain) => {
     // 1. 获取页面内容
     const pageData = await scrapeWebsite(domain);
     
-    // 2. 检查 Robots.txt
+    // 2. 检查 Robots.txt (Bot Access)
     const botAccess = await checkAiBotAccess(domain);
 
-    // 3. 分析结构化数据 (Schema)
-    const schemaAnalysis = analyzeSchema(pageData.html);
+    // 3. 模拟 AI 回答检查 (Step 1: Check AI Answers)
+    const aiAnswersCheck = await checkAiAnswers(domain, pageData);
 
-    // 4. 分析内容结构 (Extractability)
-    const contentAnalysis = analyzeContentStructure(pageData.html, pageData.markdown);
+    // 4. 分析引用模式 (Step 2: Analyze Citation Patterns)
+    // 包括: Content structure, Authority signals, Freshness, Schema markup, Third-party presence
+    const citationPatterns = analyzeCitationPatterns(pageData, botAccess);
 
-    // 5. 检查外部引用和权威性 (Authority)
-    const authorityAnalysis = analyzeAuthority(pageData.html, pageData.markdown);
+    // 5. 内容可提取性检查 (Step 3: Content Extractability Check)
+    const extractability = analyzeContentStructure(pageData.html, pageData.markdown);
 
     // 6. 计算得分
-    const score = calculateAiScore(botAccess, schemaAnalysis, contentAnalysis, authorityAnalysis);
+    const score = calculateAiScore(botAccess, citationPatterns, extractability);
 
-    return {
+    const result = {
       domain,
       timestamp,
       score,
       sections: {
         botAccess,
-        schema: schemaAnalysis,
-        content: contentAnalysis,
-        authority: authorityAnalysis
+        aiAnswers: aiAnswersCheck,
+        citationPatterns,
+        extractability
       }
     };
+
+    // 自动保存报告
+    await saveAiSeoReport(result);
+
+    return result;
 
   } catch (error) {
     console.error('AI SEO Analysis Failed:', error);
@@ -76,7 +84,8 @@ const scrapeWebsite = async (domain) => {
 
     return {
       html: data.data.html || '',
-      markdown: data.data.markdown || ''
+      markdown: data.data.markdown || '',
+      metadata: data.data.metadata || {}
     };
   } catch (error) {
     console.error('Scrape failed:', error);
@@ -113,13 +122,6 @@ const checkAiBotAccess = async (domain) => {
   ];
 
   const results = aiBots.map(bot => {
-    // 简单的 Disallow 检查
-    const isBlocked = content.toLowerCase().includes(`user-agent: ${bot.name.toLowerCase()}`) && 
-                      content.toLowerCase().includes('disallow: /'); // 简化的检查，实际解析更复杂
-    // 更严谨的解析应该看具体的 User-agent 块，这里做简化处理：
-    // 如果 robots.txt 包含 "User-agent: BotName" 且紧接着有 "Disallow: /" 则视为拦截
-    
-    // 简单的正则匹配
     const regex = new RegExp(`User-agent:\\s*${bot.name}[\\s\\S]*?Disallow:\\s*/`, 'i');
     const blockedByRule = regex.test(content);
 
@@ -131,13 +133,127 @@ const checkAiBotAccess = async (domain) => {
 
   return {
     exists,
-    robotsContent: content.slice(0, 500), // 预览
+    robotsContent: content.slice(0, 500),
     bots: results
   };
 };
 
 /**
- * 3. 分析 Schema
+ * 3. 模拟 AI 回答检查 (Step 1)
+ * 既然无法直接查询 ChatGPT，我们基于页面内容特征来评估其作为“优质答案”的潜力
+ */
+const checkAiAnswers = async (domain, pageData) => {
+    const { markdown, metadata } = pageData;
+    const queries = [];
+    
+    // 基于 Title 生成潜在查询
+    if (metadata.title) {
+        queries.push(`What is ${metadata.title.split('|')[0].trim()}?`);
+        queries.push(`${metadata.title.split('|')[0].trim()} reviews`);
+    }
+
+    // 检查页面是否包含直接回答问题的结构
+    const hasDefinition = /is a|refers to|defined as/i.test(markdown.slice(0, 1000));
+    const hasDirectAnswer = markdown.split('\n').some(line => line.length > 50 && line.length < 200 && !line.includes('#'));
+    
+    return {
+        potentialQueries: queries.slice(0, 3),
+        isOptimizedForAnswers: hasDefinition && hasDirectAnswer,
+        factors: [
+            { name: '首段定义', passed: hasDefinition, desc: '首段是否包含清晰的定义（利于 "What is" 类查询）' },
+            { name: '独立答案块', passed: hasDirectAnswer, desc: '是否包含 40-60 词的独立段落（利于提取为 Snippet）' }
+        ]
+    };
+};
+
+/**
+ * 4. 分析引用模式 (Step 2)
+ */
+const analyzeCitationPatterns = (pageData, botAccess) => {
+    const { html, markdown, metadata } = pageData;
+
+    // 4.1 Content Structure
+    const hasTable = /<table/i.test(html);
+    const hasList = /<ul|<ol/i.test(html);
+    const hasH2 = /<h2/i.test(html);
+    
+    // 4.2 Authority Signals
+    const externalLinks = (html.match(/href=["']https?:\/\/(?!domain)/g) || []).length;
+    const statsMatches = markdown.match(/\d+(\.\d+)?%|\d{4}年|\d+个/g) || [];
+    const citationKeywords = ['根据', 'According to', 'Source:', '数据来源', 'study', 'research'];
+    const hasCitations = citationKeywords.some(kw => markdown.includes(kw));
+    const hasAuthor = /author|by|作者/i.test(html) || !!metadata.author;
+
+    // 4.3 Freshness
+    // 尝试在 meta 中找 date
+    const dateMatch = html.match(/datePublished|dateModified|publish_date|updated_time/i);
+    const hasDate = !!dateMatch || /\d{4}-\d{2}-\d{2}/.test(html);
+
+    // 4.4 Schema Markup
+    const schemaAnalysis = analyzeSchema(html);
+
+    // 4.5 Third-party Presence (模拟)
+    // 检查是否链接到权威第三方 (Wikipedia, LinkedIn, G2 等)
+    const authoritativeDomains = ['wikipedia.org', 'linkedin.com', 'g2.com', 'capterra.com', 'trustradius.com', 'github.com'];
+    const hasThirdPartyLinks = authoritativeDomains.some(d => html.includes(d));
+
+    return {
+        structure: {
+            score: (hasTable ? 30 : 0) + (hasList ? 30 : 0) + (hasH2 ? 40 : 0),
+            items: [
+                { name: '表格数据', passed: hasTable, desc: '适合 "vs" 对比类查询提取' },
+                { name: '列表结构', passed: hasList, desc: '适合 "How to" 步骤提取' },
+                { name: 'H2 标题结构', passed: hasH2, desc: '清晰的层级结构' }
+            ]
+        },
+        authority: {
+            score: (externalLinks > 0 ? 20 : 0) + (statsMatches.length > 0 ? 30 : 0) + (hasCitations ? 30 : 0) + (hasAuthor ? 20 : 0),
+            items: [
+                { name: '外部引用链接', passed: externalLinks > 0, desc: '链接到外部权威来源' },
+                { name: '统计数据', passed: statsMatches.length > 0, desc: '包含具体数字和统计' },
+                { name: '引用来源声明', passed: hasCitations, desc: '使用 "According to" 等引用语' },
+                { name: '作者署名', passed: hasAuthor, desc: '明确的作者信息' }
+            ]
+        },
+        freshness: {
+            score: hasDate ? 100 : 0,
+            items: [
+                { name: '发布/更新日期', passed: hasDate, desc: '明确的时间戳信号' }
+            ]
+        },
+        schema: schemaAnalysis,
+        thirdParty: {
+            score: hasThirdPartyLinks ? 100 : 0,
+            items: [
+                { name: '关联权威平台', passed: hasThirdPartyLinks, desc: '链接到 Wikipedia, LinkedIn, G2 等' }
+            ]
+        }
+    };
+};
+
+/**
+ * 5. 内容结构分析 (Step 3: Extractability)
+ */
+const analyzeContentStructure = (html, markdown) => {
+    // 检查段落长度
+    const paragraphs = markdown.split(/\n\n+/).filter(p => p.trim().length > 0);
+    const shortParagraphs = paragraphs.filter(p => p.length < 300).length;
+    const totalParagraphs = paragraphs.length;
+    
+    // 问答模式
+    const hasQAPattern = /\?|What is|How to/i.test(markdown);
+
+    return {
+        readability: {
+            ratio: totalParagraphs > 0 ? Math.round((shortParagraphs / totalParagraphs) * 100) : 0,
+            total: totalParagraphs
+        },
+        qaPattern: hasQAPattern
+    };
+};
+
+/**
+ * Schema 分析辅助函数
  */
 const analyzeSchema = (html) => {
   const jsonLdMatches = html.match(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi) || [];
@@ -147,7 +263,6 @@ const analyzeSchema = (html) => {
     try {
       const content = match.replace(/<script[^>]*>|<\/script>/gi, '');
       const json = JSON.parse(content);
-      
       const extractType = (obj) => {
         if (obj['@type']) foundSchemas.add(obj['@type']);
         if (obj['@graph']) obj['@graph'].forEach(extractType);
@@ -156,93 +271,113 @@ const analyzeSchema = (html) => {
     } catch (e) {}
   });
 
-  const criticalSchemas = ['Article', 'FAQPage', 'HowTo', 'Product', 'BreadcrumbList', 'Organization'];
+  const criticalSchemas = ['Article', 'FAQPage', 'HowTo', 'Product', 'BreadcrumbList', 'Organization', 'Person'];
   const items = criticalSchemas.map(schema => ({
     type: schema,
     found: foundSchemas.has(schema)
   }));
 
   return {
+    score: Math.min(100, foundSchemas.size * 20),
     foundTypes: Array.from(foundSchemas),
     items
   };
 };
 
 /**
- * 4. 分析内容结构 (Extractability)
+ * 6. 计算总分
  */
-const analyzeContentStructure = (html, markdown) => {
-  const hasTable = /<table/i.test(html);
-  const hasList = /<ul|<ol/i.test(html);
-  const hasH1 = /<h1/i.test(html);
-  const hasH2 = /<h2/i.test(html);
-  
-  // 检查段落长度 (简易版：Markdown 中换行符分割的段落，平均长度)
-  const paragraphs = markdown.split(/\n\n+/).filter(p => p.trim().length > 0);
-  const shortParagraphs = paragraphs.filter(p => p.length < 300).length; // AI 喜欢短段落
-  const totalParagraphs = paragraphs.length;
-  
-  // 检查是否包含类似 "Q:" "A:" 或 "What is" 的问答模式
-  const hasQAPattern = /\?|What is|How to/i.test(markdown);
+const calculateAiScore = (botAccess, citationPatterns, extractability) => {
+    let score = 0;
+    
+    // Bot Access (20%)
+    const blockedCount = botAccess.bots.filter(b => b.status === 'blocked').length;
+    score += (blockedCount === 0 ? 20 : Math.max(0, 20 - blockedCount * 5));
 
-  return {
-    hasTable,
-    hasList,
-    structure: {
-      h1: hasH1,
-      h2: hasH2,
-    },
-    readability: {
-      shortParagraphs,
-      totalParagraphs,
-      ratio: totalParagraphs > 0 ? Math.round((shortParagraphs / totalParagraphs) * 100) : 0
-    },
-    extractabilityScore: (hasTable ? 20 : 0) + (hasList ? 20 : 0) + (hasH2 ? 20 : 0) + (hasQAPattern ? 20 : 0)
-  };
+    // Citation Patterns (60%)
+    score += (citationPatterns.structure.score / 100) * 15;
+    score += (citationPatterns.authority.score / 100) * 15;
+    score += (citationPatterns.freshness.score / 100) * 10;
+    score += (citationPatterns.schema.score / 100) * 10;
+    score += (citationPatterns.thirdParty.score / 100) * 10;
+
+    // Extractability (20%)
+    score += (extractability.readability.ratio / 100) * 10;
+    score += (extractability.qaPattern ? 10 : 0);
+
+    return Math.round(score);
 };
 
 /**
- * 5. 权威性分析
+ * 保存报告
  */
-const analyzeAuthority = (html, markdown) => {
-  // 检查外部链接 (引用来源)
-  const externalLinks = (html.match(/href=["']https?:\/\/(?!domain)/g) || []).length;
-  
-  // 检查数字/统计数据
-  const statsMatches = markdown.match(/\d+(\.\d+)?%|\d{4}年|\d+个/g) || [];
-  
-  // 检查引用词
-  const citationKeywords = ['根据', 'According to', 'Source:', '数据来源', 'study', 'research'];
-  const hasCitations = citationKeywords.some(kw => markdown.includes(kw));
+const saveAiSeoReport = async (result) => {
+    const domain = result.domain.replace(/^https?:\/\//, '').replace(/\/$/, '').replace(/[^a-zA-Z0-9.-]/g, '_');
+    const timestamp = new Date(result.timestamp).getTime();
+    
+    // 1. 保存 JSON 记录
+    const jsonFilename = `${domain}_${timestamp}_ai.json`;
+    await putFile(`${AUDIT_RECORDS_DIR}/${jsonFilename}`, JSON.stringify(result, null, 2), `Add AI SEO audit record for ${result.domain}`);
 
-  return {
-    externalLinkCount: externalLinks,
-    statsCount: statsMatches.length,
-    hasCitations
-  };
+    // 2. 保存 Markdown 报告
+    const dateStr = new Date(result.timestamp).toISOString().split('T')[0];
+    const mdFilename = `AI_SEO_${domain}_${dateStr}.md`;
+    const mdContent = generateMarkdownReport(result);
+    await putFile(`${AUDIT_MD_DIR}/${mdFilename}`, mdContent, `Add AI SEO Audit Report for ${result.domain}`);
 };
 
 /**
- * 6. 计算得分
+ * 生成 Markdown 报告
  */
-const calculateAiScore = (botAccess, schema, content, authority) => {
-  let score = 0;
+const generateMarkdownReport = (result) => {
+    let md = `# AI SEO 审计报告: ${result.domain}\n\n`;
+    md += `**日期:** ${new Date(result.timestamp).toLocaleString()}\n`;
+    md += `**AI 准备度评分:** ${result.score}/100\n\n`;
 
-  // Bot Access (Max 30)
-  const blockedCount = botAccess.bots.filter(b => b.status === 'blocked').length;
-  score += Math.max(0, 30 - (blockedCount * 5));
+    md += `## 🤖 AI Bot 访问权限\n\n`;
+    result.sections.botAccess.bots.forEach(bot => {
+        md += `- **${bot.name}**: ${bot.status === 'allowed' ? '✅ 允许' : '❌ 拦截'}\n`;
+    });
+    md += `\n`;
 
-  // Schema (Max 25)
-  const schemaCount = schema.items.filter(i => i.found).length;
-  score += Math.min(25, schemaCount * 5);
+    md += `## 📚 引用模式分析\n\n`;
+    
+    md += `### 内容结构\n`;
+    result.sections.citationPatterns.structure.items.forEach(item => {
+        md += `- [${item.passed ? 'x' : ' '}] ${item.name}: ${item.desc}\n`;
+    });
 
-  // Content (Max 25)
-  score += Math.min(25, content.extractabilityScore / 80 * 25);
+    md += `\n### 权威性信号\n`;
+    result.sections.citationPatterns.authority.items.forEach(item => {
+        md += `- [${item.passed ? 'x' : ' '}] ${item.name}: ${item.desc}\n`;
+    });
 
-  // Authority (Max 20)
-  if (authority.externalLinkCount > 0) score += 5;
-  if (authority.statsCount > 0) score += 10;
-  if (authority.hasCitations) score += 5;
+    md += `\n### 结构化数据 (Schema)\n`;
+    result.sections.citationPatterns.schema.items.forEach(item => {
+        md += `- [${item.found ? 'x' : ' '}] ${item.type}\n`;
+    });
 
-  return Math.round(score);
+    return md;
+};
+
+// 获取 AI 历史记录 (复用 SeoService 的逻辑，只是过滤条件不同)
+export const getAiAuditHistory = async () => {
+    try {
+        const files = await getRepoContent(AUDIT_RECORDS_DIR);
+        if (!files) return [];
+        
+        const records = [];
+        for (const file of files) {
+            if (file.type === 'file' && file.name.endsWith('_ai.json')) {
+                const content = await getFileContent(file.path);
+                if (content && content.content) {
+                    records.push(JSON.parse(content.content));
+                }
+            }
+        }
+        return records.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    } catch (e) {
+        console.error('Failed to load AI history:', e);
+        return [];
+    }
 };

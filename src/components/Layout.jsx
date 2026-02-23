@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { 
@@ -61,7 +62,7 @@ const Layout = () => {
       icon: Activity 
     },
     { 
-      label: 'AI SEO', 
+      label: 'AI SEO Audit', 
       path: '/ai-seo', 
       icon: Bot 
     }
