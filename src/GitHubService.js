@@ -54,7 +54,7 @@ export const getRepoContent = async (path = '') => {
       sha: item.sha, // 关键：保存 SHA 以便后续更新/删除
       children: item.type === 'dir' ? [] : undefined,
       content: null
-    })).filter(item => item.type === 'folder' || item.name.endsWith('.md'));
+    })).filter(item => item.type === 'folder' || item.name.endsWith('.md') || item.name.endsWith('.json'));
     
   } catch (error) {
     console.error('Fetch repo content failed:', error);
