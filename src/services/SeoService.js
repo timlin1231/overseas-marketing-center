@@ -982,10 +982,19 @@ const getLocalHistory = () => {
 };
 
 const saveToGitHub = async (result) => {
-  const sanitizedDomain = result.domain.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const sanitizedDomain = result.domain.replace(/^https?:\/\//, '').replace(/\/$/, '').replace(/[^a-zA-Z0-9.-]/g, '_');
   const timestamp = new Date(result.timestamp).getTime();
   const filename = `${sanitizedDomain}_${timestamp}.json`;
   const filePath = `${AUDIT_RECORDS_DIR}/${filename}`;
+
+  // Ensure directory exists
+  try {
+      await getRepoContent(AUDIT_RECORDS_DIR);
+  } catch (e) {
+      // Create if not exists (by creating a dummy file then deleting it, or relying on putFile creating it if recursive?)
+      // Actually putFile usually handles file creation, but parent dir must often exist or be handled by API.
+      // GitHub API creates dirs automatically on file create.
+  }
 
   const content = JSON.stringify(result, null, 2);
   await putFile(filePath, content, `Add SEO audit record for ${result.domain}`);
@@ -998,6 +1007,7 @@ const saveToMarkdown = async (result) => {
     const filePath = `${AUDIT_MD_DIR}/${filename}`;
 
     let md = `# SEO Audit Report: ${result.domain}\n\n`;
+    // ... (rest of markdown generation)
     md += `**Date:** ${new Date(result.timestamp).toLocaleString()}\n`;
     md += `**Overall Score:** ${result.overallScore.overall}/100\n\n`;
     
