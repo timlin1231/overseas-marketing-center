@@ -92,6 +92,12 @@ export const putFile = async (path, content, message, sha = null) => {
     
     if (sha) {
       body.sha = sha;
+    } else {
+        // Try to fetch existing SHA first to avoid 409 Conflict if file exists but SHA wasn't passed
+        const existing = await getFileContent(path);
+        if (existing && existing.sha) {
+            body.sha = existing.sha;
+        }
     }
 
     const response = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents/${path}`, {

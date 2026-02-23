@@ -309,6 +309,13 @@ const saveAiSeoReport = async (result) => {
     const domain = result.domain.replace(/^https?:\/\//, '').replace(/\/$/, '').replace(/[^a-zA-Z0-9.-]/g, '_');
     const timestamp = new Date(result.timestamp).getTime();
     
+    // Ensure directory exists
+    try {
+        await getRepoContent(AUDIT_RECORDS_DIR);
+    } catch (e) {
+        // Ignore if not found, putFile usually handles creation if path is simple
+    }
+
     // 1. 保存 JSON 记录
     const jsonFilename = `${domain}_${timestamp}_ai.json`;
     await putFile(`${AUDIT_RECORDS_DIR}/${jsonFilename}`, JSON.stringify(result, null, 2), `Add AI SEO audit record for ${result.domain}`);
