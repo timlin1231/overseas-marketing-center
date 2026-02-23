@@ -26,6 +26,16 @@ const Home = () => {
     },
     {
       id: 3,
+      title: 'AI 搜索优化 (AI SEO)',
+      description: '优化内容以适应 AI 搜索（ChatGPT, Perplexity），提升 AI 引用率。',
+      icon: <Bot className="w-8 h-8 text-purple-500" />,
+      active: true,
+      link: '/ai-seo',
+      statusText: 'NEW',
+      techStack: 'Robots.txt Analysis, Schema Check, NLP'
+    },
+    {
+      id: 4,
       title: 'GEO 内容生产 Agent',
       description: '自动生成针对不同国家/地区的本地化营销内容。',
       icon: <Globe className="w-8 h-8 text-gray-400" />,

@@ -9,7 +9,8 @@ import {
   X,
   Layout as LayoutIcon,
   ChevronDown,
-  Github
+  Github,
+  Bot
 } from 'lucide-react';
 
 const Layout = () => {
@@ -58,6 +59,11 @@ const Layout = () => {
       label: 'SEO Audit', 
       path: '/seo-audit', 
       icon: Activity 
+    },
+    { 
+      label: 'AI SEO', 
+      path: '/ai-seo', 
+      icon: Bot 
     }
   ];
 
