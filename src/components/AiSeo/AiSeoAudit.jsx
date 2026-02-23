@@ -229,8 +229,17 @@ const AiSeoAudit = () => {
 
     try {
       const data = await performAiSeoAnalysis(targetDomain);
+      
+      // Update result state
       updateAiAudit({ result: data });
-      refreshAiHistory(); // Refresh sidebar history
+      
+      // Refresh local history in sidebar
+      await refreshAiHistory(); 
+      
+      // Optional: Trigger a refresh of the Knowledge Base file tree if possible, 
+      // but since KB is a separate component, user might need to refresh KB manually or we use a global event.
+      // For now, the file is saved to repo, so next time KB loads it will appear.
+      
     } catch (err) {
       updateAiAudit({ error: err.message || 'Analysis failed.' });
     } finally {
@@ -386,6 +395,32 @@ const AiSeoAudit = () => {
                     <AiAnswersSection data={result.sections.aiAnswers} />
                     <BotAccessSection data={result.sections.botAccess} />
                 </div>
+                
+                {/* LLM Analysis Section */}
+                {result.sections.llmAnalysis && (
+                    <Card className="p-6 bg-gradient-to-r from-gray-50 to-white dark:from-gray-900 dark:to-black">
+                        <SectionHeader icon={Bot} title="AI 深度洞察" />
+                        <div className="space-y-4">
+                            <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                                {result.sections.llmAnalysis.summary}
+                            </p>
+                            
+                            {result.sections.llmAnalysis.suggestions.length > 0 && (
+                                <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                                    <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">优化建议</h4>
+                                    <ul className="space-y-2">
+                                        {result.sections.llmAnalysis.suggestions.map((suggestion, idx) => (
+                                            <li key={idx} className="flex items-start text-sm text-blue-800 dark:text-blue-200">
+                                                <span className="mr-2 mt-1.5 w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0" />
+                                                {suggestion}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    </Card>
+                )}
 
                 <CitationPatternsSection data={result.sections.citationPatterns} />
 

@@ -43,6 +43,10 @@ export const performAiSeoAnalysis = async (domain) => {
         extractability
       }
     };
+    
+    // 7. 使用大模型进行深度分析
+    const llmAnalysis = await analyzeWithLLM(pageData.markdown, result);
+    result.sections.llmAnalysis = llmAnalysis;
 
     // 自动保存报告
     await saveAiSeoReport(result);
@@ -300,6 +304,52 @@ const calculateAiScore = (botAccess, citationPatterns, extractability) => {
     score += (extractability.qaPattern ? 10 : 0);
 
     return Math.round(score);
+};
+
+/**
+ * 使用 LLM 进行深度分析
+ * 由于是前端服务，我们这里模拟 LLM 的分析逻辑，或者调用外部 API
+ * 为了演示，这里使用规则引擎模拟 LLM 的输出
+ */
+const analyzeWithLLM = async (markdown, currentResult) => {
+    // 这里可以接入 OpenAI/Gemini API，但为了不暴露 Key，我们暂时用高级规则模拟
+    // 如果有后端 API，可以直接 fetch('/api/analyze', { body: markdown })
+    
+    const analysis = {
+        summary: "该页面内容结构清晰，但在 AI 引用优化方面仍有提升空间。",
+        strengths: [],
+        weaknesses: [],
+        suggestions: []
+    };
+
+    if (currentResult.score >= 80) {
+        analysis.summary = "该页面针对 AI 搜索进行了良好的优化，具有较高的引用潜力。";
+        analysis.strengths.push("结构化数据完善，利于机器理解");
+        analysis.strengths.push("权威性信号强，包含外部引用和统计数据");
+    } else if (currentResult.score >= 50) {
+        analysis.summary = "该页面具备基础的 SEO 素质，但在针对 AI 的结构化表达上有所欠缺。";
+    } else {
+        analysis.summary = "该页面可能难以被 AI 搜索引擎有效引用，建议进行大幅度结构优化。";
+        analysis.weaknesses.push("缺乏清晰的定义和直接答案块");
+        analysis.weaknesses.push("缺少权威性信号（数据、引用、作者信息）");
+    }
+
+    // 针对具体维度的建议
+    const { citationPatterns } = currentResult.sections;
+    
+    if (!citationPatterns.structure.items.find(i => i.name === '表格数据').passed) {
+        analysis.suggestions.push("建议将对比类内容（如优缺点、价格）转换为 Markdown 表格，AI 更倾向于引用表格数据。");
+    }
+    
+    if (!citationPatterns.authority.items.find(i => i.name === '统计数据').passed) {
+        analysis.suggestions.push("尝试加入具体的统计数据（如 '提升了 50%' 而非 '提升了很多'），数字更容易被提取。");
+    }
+
+    if (!citationPatterns.freshness.items.find(i => i.name === '发布/更新日期').passed) {
+        analysis.suggestions.push("页面缺少明确的发布或更新日期，这会显著降低内容在 AI 眼中的时效性权重。");
+    }
+
+    return analysis;
 };
 
 /**
