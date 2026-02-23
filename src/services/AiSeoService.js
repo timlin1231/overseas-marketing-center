@@ -59,27 +59,21 @@ export const performAiSeoAnalysis = async (domain) => {
  * 1. 抓取页面 (复用 Firecrawl)
  */
 const scrapeWebsite = async (domain) => {
-  if (!FIRECRAWL_API_KEY) {
-    throw new Error('Firecrawl API Key 未配置');
-  }
-
   try {
-    const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
+    const response = await fetch('/api/scrape', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         url: domain,
-        formats: ['markdown', 'html'],
-        onlyMainContent: false
+        formats: ['markdown', 'html']
       })
     });
 
     const data = await response.json();
     if (!data.success || !data.data) {
-      throw new Error('Firecrawl: 未返回有效数据');
+      throw new Error(`Scrape Failed: ${data.error || 'Unknown error'}`);
     }
 
     return {

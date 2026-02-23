@@ -70,33 +70,23 @@ export const performSeoAudit = async (domain) => {
  * 1. 页面抓取（Firecrawl）
  */
 const scrapeWebsite = async (domain) => {
-  if (!FIRECRAWL_API_KEY) {
-    throw new Error('Firecrawl API Key 未配置，无法进行页面抓取。请在设置中配置 API Key。');
-  }
-
   try {
-    const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
+    const response = await fetch('/api/scrape', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         url: domain,
         formats: ['markdown', 'html'],
-        onlyMainContent: false,
         includeTags: [],
         excludeTags: []
       })
     });
 
-    if (!response.ok) {
-      throw new Error(`Firecrawl API Error: ${response.status}`);
-    }
-
     const data = await response.json();
     if (!data.success || !data.data) {
-      throw new Error('Firecrawl: 未返回有效数据');
+      throw new Error(`Scrape Failed: ${data.error || 'Unknown error'}`);
     }
 
     return {
@@ -106,7 +96,7 @@ const scrapeWebsite = async (domain) => {
       links: data.data.metadata?.links || []
     };
   } catch (error) {
-    console.error('Firecrawl scrape failed:', error);
+    console.error('Scrape failed:', error);
     throw error;
   }
 };
@@ -181,12 +171,11 @@ const auditTraffic = async (domain) => {
     const trafficCvUrl = `https://traffic.cv/${hostname}`;
     
     try {
-        // 使用 Firecrawl 尝试抓取 traffic.cv 公开页面
-        const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
+        // 使用后端 Proxy 抓取
+        const response = await fetch('/api/scrape', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${FIRECRAWL_API_KEY}`
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify({
                 url: trafficCvUrl,
@@ -195,9 +184,10 @@ const auditTraffic = async (domain) => {
             })
         });
 
-        if (response.ok) {
-            const data = await response.json();
-            const markdown = data.data?.markdown || '';
+        const data = await response.json();
+        
+        if (data.success && data.data) {
+            const markdown = data.data.markdown || '';
             
             // traffic.cv Regex Extraction
             const totalVisitsMatch = markdown.match(/Total Visits\s*([\d.KMB]+)/i) || markdown.match(/Total Visits\s*\n\s*([\d.KMB]+)/i);
