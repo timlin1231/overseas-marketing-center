@@ -63,7 +63,7 @@ const Layout = () => {
       icon: Activity 
     },
     { 
-      label: 'AI SEO Audit', 
+      label: 'AI 搜索内容合规检测', 
       path: '/ai-seo', 
       icon: Bot 
     }

@@ -200,21 +200,21 @@ const downloadReport = (result) => {
 
     if (result.contentAnalysis) {
         md += `## 内容类型分析\n\n`;
-        md += `**识别类型:** ${result.contentAnalysis.contentType.primary}\n\n`;
+        md += `**识别类型:** ${result.contentAnalysis?.contentType?.primary || '未知'}\n\n`;
         md += `**典型特征:**\n`;
-        result.contentAnalysis.contentType.characteristics.forEach(char => {
+        result.contentAnalysis?.contentType?.characteristics?.forEach(char => {
             md += `- ${char}\n`;
         });
         
         md += `\n## AI偏好内容特征\n\n`;
-        result.contentAnalysis.aiPreferredTraits.forEach(trait => {
+        result.contentAnalysis?.aiPreferredTraits?.forEach(trait => {
             md += `- [${trait.met ? 'x' : ' '}] **${trait.name}**: ${trait.desc}\n`;
         });
 
         md += `\n## 优化建议路线图\n\n`;
-        result.contentAnalysis.optimizationPhases.forEach(phase => {
+        result.contentAnalysis?.optimizationPhases?.forEach(phase => {
             md += `### ${phase.phase} - ${phase.title}\n\n`;
-            phase.tasks.forEach(task => {
+            phase.tasks?.forEach(task => {
                 md += `- [${task.done ? 'x' : ' '}] ${task.text}\n`;
             });
             md += `\n`;
@@ -225,7 +225,7 @@ const downloadReport = (result) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    const filename = `AI_SEO_Report_${result.domain.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.md`;
+    const filename = `AI_SEO_Report_${(result.domain || 'report').replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.md`;
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
@@ -242,6 +242,24 @@ const AiSeoAudit = () => {
   const [historyRecords, setHistoryRecords] = useState([]);
 
   // --- Functions ---
+
+  // Helper to ensure result data structure is valid (prevents white screen crashes)
+  const normalizeResult = (data) => {
+    if (!data) return null;
+    return {
+        ...data,
+        dimensionScores: data.dimensionScores || {
+            aiVisibility: 0,
+            structure: 0,
+            authority: 0,
+            extractability: 0,
+            freshness: 0
+        },
+        passedItems: Array.isArray(data.passedItems) ? data.passedItems : [],
+        failedItems: Array.isArray(data.failedItems) ? data.failedItems : [],
+        contentAnalysis: data.contentAnalysis || null
+    };
+  };
 
   const refreshAiHistory = async () => {
     try {
@@ -268,7 +286,8 @@ const AiSeoAudit = () => {
     setResult(null);
 
     try {
-      const data = await performAiSeoAnalysis(targetDomain);
+      const rawData = await performAiSeoAnalysis(targetDomain);
+      const data = normalizeResult(rawData);
       setResult(data);
       await refreshAiHistory(); 
     } catch (err) {
@@ -280,7 +299,8 @@ const AiSeoAudit = () => {
 
   const loadHistoryItem = (item) => {
     if (!item) return;
-    setResult(item);
+    const safeResult = normalizeResult(item);
+    setResult(safeResult);
     setUrl(item.domain || '');
     setError(null);
   };
