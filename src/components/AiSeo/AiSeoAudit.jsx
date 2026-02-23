@@ -427,30 +427,33 @@ const AiSeoAudit = () => {
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Audit History</span>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {history.map((item, idx) => (
-                <div 
-                    key={idx}
-                    onClick={() => loadHistoryItem(item)}
-                    className={`p-3 rounded-md cursor-pointer text-sm transition-colors ${
-                        result && result.timestamp === item.timestamp 
-                        ? 'bg-white shadow-sm border border-gray-200 text-black dark:bg-gray-800 dark:border-gray-700 dark:text-white' 
-                        : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-gray-800/50'
-                    }`}
-                >
-                    <div className="font-medium truncate">{item.domain.replace(/^https?:\/\//, '')}</div>
-                    <div className="flex justify-between items-center mt-1">
-                        <span className="text-[10px] text-gray-400">{new Date(item.timestamp).toLocaleDateString('zh-CN')}</span>
-                        <span className={`text-[10px] font-bold ${
-                            item.score >= 80 ? 'text-green-600' : item.score >= 50 ? 'text-yellow-600' : 'text-red-600'
-                        }`}>
-                            {item.score}
+            {historyRecords.length === 0 ? (
+                <div className="text-xs text-gray-400 px-2 py-4 text-center">暂无历史记录</div>
+            ) : (
+                historyRecords.map((item, idx) => (
+                    <div 
+                        key={idx}
+                        onClick={() => loadHistoryItem(item)}
+                        className={`p-3 rounded-md cursor-pointer text-sm transition-colors ${
+                            result && result.timestamp === item.timestamp 
+                            ? 'bg-white shadow-sm border border-gray-200 text-black dark:bg-gray-800 dark:border-gray-700 dark:text-white' 
+                            : 'text-gray-500 hover:bg-gray-200/50 dark:hover:bg-gray-800/50'
+                        }`}
+                    >
+                        <div className="font-medium truncate">{item.domain.replace(/^https?:\/\//, '')}</div>
+                        <div className="flex justify-between items-center mt-1">
+                            <span className="text-[10px] text-gray-400">{new Date(item.timestamp).toLocaleDateString('zh-CN')}</span>
+                            <span className={`text-[10px] font-bold ${
+                                item.score >= 80 ? 'text-green-600' : item.score >= 50 ? 'text-yellow-600' : 'text-red-600'
+                            }`}>
+                                {item.score}
                             </span>
                         </div>
                     </div>
                 ))
-             )}
-         </div>
-       </div>
+            )}
+        </div>
+      </div>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
