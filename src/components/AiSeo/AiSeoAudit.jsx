@@ -369,9 +369,15 @@ const BotAccessSection = ({ data }) => {
 // --- Main Page ---
 
 const AiSeoAudit = () => {
-  const { aiAudit, updateAiAudit } = useTask();
-  // Ensure aiAudit is defined to prevent white screen
-  const { result, loading, error } = aiAudit || { result: null, loading: false, error: null };
+  // Fix: Correctly destructure aiAuditState from Context
+  const { aiAuditState, updateAiAudit } = useTask();
+  
+  // Use default values to prevent crash if Context is not ready
+  const { result, loading, error } = aiAuditState || { 
+    result: null, 
+    loading: false, 
+    error: null 
+  };
   
   const [url, setUrl] = useState('');
   const [historyRecords, setHistoryRecords] = useState([]);
