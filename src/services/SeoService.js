@@ -924,7 +924,7 @@ export const getAuditHistory = async () => {
 
     const records = [];
     for (const file of files) {
-      if (file.type === 'file' && file.name.endsWith('.json')) {
+      if (file.type === 'file' && file.name.endsWith('.json') && !file.name.endsWith('_ai.json')) {
         try {
           const content = await getFileContent(file.path);
           if (content && content.content) {

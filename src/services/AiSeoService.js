@@ -572,6 +572,11 @@ const saveAiSeoReport = async (result) => {
     const mdFilename = `AI_SEO_${domain}_${dateStr}.md`;
     const mdContent = generateMarkdownReport(result);
     await putFile(`${AUDIT_MD_DIR}/${mdFilename}`, mdContent, `Add AI SEO Audit Report for ${result.domain}`);
+
+    // 3. Save to localStorage
+    const localHistory = getLocalHistory();
+    const newHistory = [result, ...localHistory].slice(0, 20);
+    localStorage.setItem('ai_seo_audit_history', JSON.stringify(newHistory));
 };
 
 /**
@@ -608,11 +613,15 @@ const generateMarkdownReport = (result) => {
     return md;
 };
 
-// 获取 AI 历史记录 (复用 SeoService 的逻辑，只是过滤条件不同)
+// 获取 AI 历史记录 (优先 GitHub，失败则 LocalStorage)
 export const getAiAuditHistory = async () => {
     try {
         const files = await getRepoContent(AUDIT_RECORDS_DIR);
-        if (!files) return [];
+        
+        // If empty or no files found, try local storage
+        if (!files || files.length === 0) {
+             return getLocalHistory();
+        }
         
         const records = [];
         for (const file of files) {
@@ -623,9 +632,25 @@ export const getAiAuditHistory = async () => {
                 }
             }
         }
+        
+        // Sync local storage with fetched records if successful
+        if (records.length > 0) {
+            localStorage.setItem('ai_seo_audit_history', JSON.stringify(records.slice(0, 20)));
+        }
+        
         return records.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     } catch (e) {
-        console.error('Failed to load AI history:', e);
-        return [];
+        console.error('Failed to load AI history from GitHub, falling back to local:', e);
+        return getLocalHistory();
     }
+};
+
+const getLocalHistory = () => {
+  try {
+    const history = localStorage.getItem('ai_seo_audit_history');
+    return history ? JSON.parse(history) : [];
+  } catch (e) {
+    console.error('Failed to parse localStorage history', e);
+    return [];
+  }
 };
