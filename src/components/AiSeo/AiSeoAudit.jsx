@@ -370,7 +370,8 @@ const BotAccessSection = ({ data }) => {
 
 const AiSeoAudit = () => {
   const { aiAudit, updateAiAudit } = useTask();
-  const { result, loading, error } = aiAudit;
+  // Ensure aiAudit is defined to prevent white screen
+  const { result, loading, error } = aiAudit || { result: null, loading: false, error: null };
   
   const [url, setUrl] = useState('');
   const [historyRecords, setHistoryRecords] = useState([]);
@@ -522,31 +523,33 @@ const AiSeoAudit = () => {
                 className="space-y-6"
               >
                 {/* 1. 检测维度与评估指标 (进度条可视化) */}
-                <Card className="p-6">
-                    <h3 className="text-xl font-bold mb-6">检测维度与评估指标</h3>
-                    <div className="space-y-5">
-                        {[
-                            { label: 'AI可见性', value: result.dimensionScores.aiVisibility, color: 'bg-blue-500' },
-                            { label: '内容结构', value: result.dimensionScores.structure, color: 'bg-purple-500' },
-                            { label: '权威性', value: result.dimensionScores.authority, color: 'bg-green-500' },
-                            { label: '可提取性', value: result.dimensionScores.extractability, color: 'bg-orange-500' },
-                            { label: '内容新鲜度', value: result.dimensionScores.freshness, color: 'bg-red-500' }
-                        ].map((dimension, idx) => (
-                            <div key={idx}>
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{dimension.label}</span>
-                                    <span className="text-lg font-bold text-gray-900 dark:text-white">{dimension.value}%</span>
+                {result.dimensionScores && (
+                    <Card className="p-6">
+                        <h3 className="text-xl font-bold mb-6">检测维度与评估指标</h3>
+                        <div className="space-y-5">
+                            {[
+                                { label: 'AI可见性', value: result.dimensionScores.aiVisibility, color: 'bg-blue-500' },
+                                { label: '内容结构', value: result.dimensionScores.structure, color: 'bg-purple-500' },
+                                { label: '权威性', value: result.dimensionScores.authority, color: 'bg-green-500' },
+                                { label: '可提取性', value: result.dimensionScores.extractability, color: 'bg-orange-500' },
+                                { label: '内容新鲜度', value: result.dimensionScores.freshness, color: 'bg-red-500' }
+                            ].map((dimension, idx) => (
+                                <div key={idx}>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{dimension.label}</span>
+                                        <span className="text-lg font-bold text-gray-900 dark:text-white">{dimension.value}%</span>
+                                    </div>
+                                    <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                                        <div 
+                                            className={`h-full ${dimension.color} transition-all duration-1000`}
+                                            style={{ width: `${dimension.value}%` }}
+                                        />
+                                    </div>
                                 </div>
-                                <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                                    <div 
-                                        className={`h-full ${dimension.color} transition-all duration-1000`}
-                                        style={{ width: `${dimension.value}%` }}
-                                    />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </Card>
+                            ))}
+                        </div>
+                    </Card>
+                )}
 
                 {/* 2. 达标/未达标列表 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
