@@ -22,9 +22,10 @@ const Layout = () => {
   // Load theme from local storage or system preference
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme');
-    const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    // const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     
-    if (savedTheme === 'dark' || (!savedTheme && systemDark)) {
+    // Default to Light Mode unless explicitly set to 'dark'
+    if (savedTheme === 'dark') {
       setDarkMode(true);
       document.documentElement.classList.add('dark');
     } else {
