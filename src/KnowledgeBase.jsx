@@ -16,8 +16,7 @@ import {
   Loader,
   CheckSquare,
   Square,
-  Settings,
-  ArrowLeft
+  Settings
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { getRepoContent, getFileContent, putFile, deleteFile, deleteDirectory, createDirectory } from './GitHubService';
@@ -383,7 +382,7 @@ const KnowledgeBase = () => {
   }
 
   return (
-    <div className="flex h-screen bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
+    <div className="flex h-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
       {/* Modals */}
@@ -514,13 +513,6 @@ const KnowledgeBase = () => {
               </div>
             )}
           </div>
-        </div>
-
-        <div className="p-4 border-t border-gray-200 dark:border-gray-800">
-          <Link to="/" className="group flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:text-gray-900 transition-all dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700 dark:hover:text-white">
-            <ArrowLeft size={16} className="mr-2 group-hover:-translate-x-1 transition-transform" />
-            返回首页
-          </Link>
         </div>
       </div>
 

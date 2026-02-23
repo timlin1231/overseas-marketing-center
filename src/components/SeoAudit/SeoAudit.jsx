@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  ArrowLeft, 
   Search, 
   Activity, 
   Layout, 
@@ -22,7 +21,6 @@ import {
   ExternalLink,
   Loader2
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   performSeoAudit, 
@@ -331,17 +329,14 @@ const SeoAudit = () => {
   };
 
   return (
-    <div className="flex h-screen bg-white dark:bg-black text-black dark:text-white font-sans selection:bg-blue-100 selection:text-blue-900">
-      {/* Sidebar - Vercel Style Project List */}
+    <div className="flex h-full bg-white dark:bg-black text-black dark:text-white font-sans selection:bg-blue-100 selection:text-blue-900">
+      {/* Sidebar - History List */}
       <div className="w-64 border-r border-gray-200 dark:border-gray-800 flex flex-col flex-shrink-0 bg-gray-50/50 dark:bg-black">
         <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between h-16">
           <div className="font-bold flex items-center text-sm tracking-wide">
-            <Activity className="mr-2" size={16} />
-            SEO AUDIT
+            <History className="mr-2" size={16} />
+            AUDIT HISTORY
           </div>
-          <Link to="/" className="text-gray-400 hover:text-black dark:hover:text-white transition-colors">
-            <ArrowLeft size={16} />
-          </Link>
         </div>
         
         <div className="flex-1 overflow-y-auto p-3 space-y-1">
