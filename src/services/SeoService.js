@@ -177,10 +177,10 @@ const auditTraffic = async (domain) => {
         hostname = domain;
     }
 
-    const similarWebUrl = `https://www.similarweb.com/website/${hostname}`;
+    const trafficCvUrl = `https://traffic.cv/${hostname}`;
     
     try {
-        // 使用 Firecrawl 尝试抓取 SimilarWeb 公开页面
+        // 使用 Firecrawl 尝试抓取 traffic.cv 公开页面
         const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
             method: 'POST',
             headers: {
@@ -188,8 +188,8 @@ const auditTraffic = async (domain) => {
                 'Authorization': `Bearer ${FIRECRAWL_API_KEY}`
             },
             body: JSON.stringify({
-                url: similarWebUrl,
-                formats: ['markdown'], // 我们只需要文本来提取数据
+                url: trafficCvUrl,
+                formats: ['markdown'],
                 onlyMainContent: true
             })
         });
@@ -198,26 +198,27 @@ const auditTraffic = async (domain) => {
             const data = await response.json();
             const markdown = data.data?.markdown || '';
             
-            // 简单的正则提取尝试 (SimilarWeb 页面结构经常变，这是尽力而为)
-            // 寻找 "Total Visits" 附近的数字
-            const totalVisitsMatch = markdown.match(/Total Visits\s*([\d.KMB]+)/i);
-            const bounceRateMatch = markdown.match(/Bounce Rate\s*([\d.]+%)/i);
-            const pagesPerVisitMatch = markdown.match(/Pages per Visit\s*([\d.]+)/i);
-            const avgDurationMatch = markdown.match(/Avg Visit Duration\s*([\d:]+)/i);
+            // traffic.cv Regex Extraction
+            const totalVisitsMatch = markdown.match(/Total Visits\s*([\d.KMB]+)/i) || markdown.match(/Total Visits\s*\n\s*([\d.KMB]+)/i);
+            const bounceRateMatch = markdown.match(/Bounce Rate\s*([\d.]+%)/i) || markdown.match(/Bounce Rate\s*\n\s*([\d.]+%)/i);
+            const pagesPerVisitMatch = markdown.match(/Pages per Visit\s*([\d.]+)/i) || markdown.match(/Pages per Visit\s*\n\s*([\d.]+)/i);
+            const avgDurationMatch = markdown.match(/Avg\.? Duration\s*([\d:]+)/i) || markdown.match(/Avg\.? Duration\s*\n\s*([\d:]+)/i);
+            const globalRankMatch = markdown.match(/Global Rank\s*:?\s*([\d,]+)/i);
 
             const isSuccess = !!totalVisitsMatch;
             
             return {
-                source: 'SimilarWeb (Public)',
-                url: similarWebUrl,
+                source: 'Traffic.cv (Public)',
+                url: trafficCvUrl,
                 data: {
                     totalVisits: totalVisitsMatch ? totalVisitsMatch[1] : 'N/A',
                     bounceRate: bounceRateMatch ? bounceRateMatch[1] : 'N/A',
                     pagesPerVisit: pagesPerVisitMatch ? pagesPerVisitMatch[1] : 'N/A',
-                    avgDuration: avgDurationMatch ? avgDurationMatch[1] : 'N/A'
+                    avgDuration: avgDurationMatch ? avgDurationMatch[1] : 'N/A',
+                    globalRank: globalRankMatch ? globalRankMatch[1] : 'N/A'
                 },
-                success: true, // Always show section, even if data is N/A
-                message: isSuccess ? '' : '无法从公开页面提取数据，可能流量较低或需要登录。'
+                success: true,
+                message: isSuccess ? '' : '无法从 Traffic.cv 提取数据，可能数据暂缺。'
             };
         }
     } catch (e) {
@@ -225,16 +226,16 @@ const auditTraffic = async (domain) => {
     }
 
     return {
-        source: 'SimilarWeb',
-        url: similarWebUrl,
+        source: 'Traffic.cv',
+        url: trafficCvUrl,
         data: {
             totalVisits: 'N/A',
             bounceRate: 'N/A',
             pagesPerVisit: 'N/A',
             avgDuration: 'N/A'
         },
-        success: true, // Force true to ensure UI renders
-        message: '无法获取免费流量数据，可能流量过低或被拦截。'
+        success: true,
+        message: '无法连接 Traffic.cv 服务。'
     };
 };
 

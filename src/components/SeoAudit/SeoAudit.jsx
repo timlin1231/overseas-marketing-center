@@ -3,8 +3,6 @@ import {
   ArrowLeft, 
   Search, 
   Activity, 
-  BarChart2, 
-  Zap, 
   Layout, 
   List, 
   History,
@@ -20,9 +18,12 @@ import {
   Smartphone,
   Code,
   Bot,
-  TrendingUp
+  TrendingUp,
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   performSeoAudit, 
   getAuditHistory, 
@@ -31,93 +32,115 @@ import {
   exportToCsv 
 } from '../../services/SeoService';
 
-// Progress Step Component
+// --- Utility Components ---
+
+const Badge = ({ children, color = 'gray' }) => {
+  const colors = {
+    gray: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+    blue: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+    green: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    red: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    yellow: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+  };
+  return (
+    <span className={`px-2 py-0.5 rounded text-xs font-medium uppercase tracking-wider ${colors[color] || colors.gray}`}>
+      {children}
+    </span>
+  );
+};
+
+const Card = ({ children, className = '' }) => (
+  <motion.div 
+    initial={{ opacity: 0, y: 10 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.3 }}
+    className={`bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg shadow-sm hover:border-gray-400 dark:hover:border-gray-600 transition-colors ${className}`}
+  >
+    {children}
+  </motion.div>
+);
+
+// --- Sub-Components ---
+
 const ProgressStep = ({ currentStep }) => {
-  const steps = [
-    { id: 1, label: '解析 DNS' },
-    { id: 2, label: '连接服务器' },
-    { id: 3, label: '抓取页面' },
-    { id: 4, label: '分析内容' },
-    { id: 5, label: '生成报告' }
-  ];
+  const steps = ['DNS', 'Server', 'Crawl', 'Content', 'Report'];
+  const percentage = Math.min(((currentStep - 1) / (steps.length - 1)) * 100, 100);
 
   return (
-    <div className="w-full max-w-2xl mx-auto my-8">
-      <div className="relative flex justify-between">
-        <div className="absolute top-1/2 left-0 w-full h-1 bg-gray-200 dark:bg-gray-700 -z-10 transform -translate-y-1/2 rounded-full" />
-        <div 
-          className="absolute top-1/2 left-0 h-1 bg-blue-500 -z-10 transform -translate-y-1/2 rounded-full transition-all duration-500" 
-          style={{ width: `${((currentStep - 1) / (steps.length - 1)) * 100}%` }}
+    <div className="w-full max-w-xl mx-auto my-12">
+      <div className="flex justify-between mb-2 text-xs font-mono text-gray-400 uppercase tracking-widest">
+        <span>Progress</span>
+        <span>{percentage.toFixed(0)}%</span>
+      </div>
+      <div className="h-1 w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+        <motion.div 
+          className="h-full bg-black dark:bg-white"
+          initial={{ width: 0 }}
+          animate={{ width: `${percentage}%` }}
+          transition={{ duration: 0.5, ease: "easeInOut" }}
         />
-        {steps.map((step) => (
-          <div key={step.id} className="flex flex-col items-center">
-            <div 
-              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
-                currentStep >= step.id 
-                  ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30' 
-                  : 'bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 text-gray-400'
-              }`}
-            >
-              {currentStep > step.id ? <CheckCircle size={14} /> : step.id}
-            </div>
-            <span className={`mt-2 text-xs font-medium transition-colors ${
-              currentStep >= step.id ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400'
-            }`}>
-              {step.label}
-            </span>
-          </div>
-        ))}
+      </div>
+      <div className="flex justify-between mt-4">
+        {steps.map((label, idx) => {
+            const stepNum = idx + 1;
+            const isActive = currentStep >= stepNum;
+            return (
+                <div key={idx} className={`flex flex-col items-center transition-colors duration-300 ${isActive ? 'text-black dark:text-white' : 'text-gray-300 dark:text-gray-700'}`}>
+                    <span className="text-[10px] font-mono uppercase tracking-wider">{label}</span>
+                </div>
+            )
+        })}
       </div>
     </div>
   );
 };
 
-// Metric Card
-const MetricCard = ({ title, value, icon, subtext }) => {
+const MetricCard = ({ title, value, subtext, icon: Icon }) => {
   const numValue = parseInt(value);
-  const colorClass = isNaN(numValue) 
-    ? 'text-gray-500 bg-gray-50' 
-    : numValue >= 80 ? 'text-green-500 bg-green-50 dark:bg-green-900/20' 
-    : numValue >= 50 ? 'text-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' 
-    : 'text-red-500 bg-red-50 dark:bg-red-900/20';
+  // Subtle status indicator
+  const statusColor = isNaN(numValue) 
+    ? 'bg-gray-200' 
+    : numValue >= 90 ? 'bg-green-500' 
+    : numValue >= 50 ? 'bg-yellow-500' 
+    : 'bg-red-500';
 
   return (
-    <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between">
-      <div>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{title}</p>
-        <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{value}</p>
-        {subtext && <p className="text-xs text-gray-400 mt-1">{subtext}</p>}
+    <Card className="p-6 flex flex-col justify-between h-32 relative overflow-hidden group">
+      <div className="flex justify-between items-start">
+        <span className="text-xs font-mono uppercase text-gray-500 tracking-wider">{title}</span>
+        {Icon && <Icon size={16} className="text-gray-400 group-hover:text-black dark:group-hover:text-white transition-colors" />}
       </div>
-      <div className={`p-3 rounded-lg ${colorClass}`}>
-        {icon}
+      
+      <div className="flex items-end space-x-2">
+          <span className="text-4xl font-bold tracking-tight font-sans">{value}</span>
+          {subtext && <span className="text-xs text-gray-400 mb-1.5">{subtext}</span>}
       </div>
-    </div>
+
+      <div className={`absolute bottom-0 left-0 h-1 w-full ${statusColor} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
+    </Card>
   );
 };
 
-// Traffic Detail Component (Updated Style)
 const TrafficSection = ({ data }) => {
     if (!data || !data.success || !data.data) return null;
 
     return (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-6">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+        <Card className="mb-6 overflow-hidden">
+            <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50">
                 <div className="flex items-center space-x-3">
-                    <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-purple-600">
-                        <TrendingUp size={20} />
+                    <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-md text-purple-600 dark:text-purple-400">
+                        <TrendingUp size={16} />
                     </div>
                     <div>
-                        <h3 className="text-lg font-bold">网站流量分析</h3>
-                        <div className="flex flex-col">
-                            <p className="text-xs text-gray-500">
-                                数据来源: {data.source}
-                            </p>
-                            {data.message && (
-                                <p className="text-xs text-amber-500 mt-0.5 flex items-center">
+                        <h3 className="text-sm font-bold">Traffic Analytics</h3>
+                        <div className="flex items-center text-[10px] text-gray-400 space-x-2">
+                             <span>Source: {data.source}</span>
+                             {data.message && (
+                                <span className="flex items-center text-amber-500">
                                     <AlertTriangle size={10} className="mr-1" />
                                     {data.message}
-                                </p>
-                            )}
+                                </span>
+                             )}
                         </div>
                     </div>
                 </div>
@@ -125,119 +148,119 @@ const TrafficSection = ({ data }) => {
                     href={data.url} 
                     target="_blank" 
                     rel="noreferrer"
-                    className="text-xs text-blue-500 hover:underline"
+                    className="text-xs flex items-center text-gray-500 hover:text-black dark:hover:text-white transition-colors"
                 >
-                    查看详情
+                    Details <ExternalLink size={10} className="ml-1" />
                 </a>
             </div>
             
-            <div className="grid grid-cols-2 md:grid-cols-4 divide-x divide-y md:divide-y-0 divide-gray-100 dark:divide-gray-700">
-                <div className="p-6 text-center">
-                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">{data.data.totalVisits || '-'}</p>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide">月访问量</p>
-                </div>
-                <div className="p-6 text-center">
-                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">{data.data.bounceRate || '-'}</p>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide">跳出率</p>
-                </div>
-                <div className="p-6 text-center">
-                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">{data.data.pagesPerVisit || '-'}</p>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide">每次访问页数</p>
-                </div>
-                <div className="p-6 text-center">
-                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-1">{data.data.avgDuration || '-'}</p>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide">平均访问时长</p>
-                </div>
+            <div className="grid grid-cols-2 md:grid-cols-5 divide-x divide-y md:divide-y-0 divide-gray-100 dark:divide-gray-800">
+                {[
+                    { label: 'Global Rank', value: data.data.globalRank || '-' },
+                    { label: 'Total Visits', value: data.data.totalVisits },
+                    { label: 'Bounce Rate', value: data.data.bounceRate },
+                    { label: 'Pages / Visit', value: data.data.pagesPerVisit },
+                    { label: 'Avg Duration', value: data.data.avgDuration }
+                ].map((item, idx) => (
+                    <div key={idx} className="p-6 text-center hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
+                        <p className="text-2xl font-mono font-semibold text-black dark:text-white mb-1 tracking-tight">
+                            {item.value || '-'}
+                        </p>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-widest">{item.label}</p>
+                    </div>
+                ))}
             </div>
-        </div>
+        </Card>
     );
 };
 
-// Section Detail Component
-const AuditSection = ({ title, icon: Icon, data }) => {
-  const [expanded, setExpanded] = useState(true);
+const AuditSection = ({ title, icon: Icon, data, index }) => {
+  const [expanded, setExpanded] = useState(index === 0);
 
   if (!data || !Array.isArray(data.items)) return null;
 
+  const score = data.totalItems > 0 ? Math.round((data.passedItems / data.totalItems) * 100) : 0;
+  const scoreColor = score >= 80 ? 'text-green-500' : score >= 50 ? 'text-yellow-500' : 'text-red-500';
+
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden mb-6">
+    <Card className="mb-4 overflow-hidden">
       <div 
-        className="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30"
+        className="p-4 flex justify-between items-center cursor-pointer select-none group"
         onClick={() => setExpanded(!expanded)}
       >
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600">
-            {Icon && <Icon size={20} />}
+        <div className="flex items-center space-x-4">
+          <div className="p-2 bg-gray-50 dark:bg-gray-900 rounded-md text-gray-500 group-hover:text-black dark:group-hover:text-white transition-colors">
+            {Icon && <Icon size={18} />}
           </div>
           <div>
-            <h3 className="text-lg font-bold">{title}</h3>
-            <p className="text-xs text-gray-500">
-              通过: {data.passedItems || 0}/{data.totalItems || 0} 项
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">{title}</h3>
+            <p className="text-xs text-gray-500 font-mono mt-0.5">
+              {data.passedItems}/{data.totalItems} Passed
             </p>
           </div>
         </div>
+        
         <div className="flex items-center space-x-4">
-          <div className="text-right hidden sm:block">
-            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-              {data.totalItems > 0 ? Math.round((data.passedItems / data.totalItems) * 100) : 0}%
+            <div className="flex flex-col items-end mr-2">
+                <span className={`text-lg font-bold font-mono ${scoreColor}`}>{score}%</span>
             </div>
-            <div className="w-24 h-1.5 bg-gray-200 rounded-full mt-1">
-              <div 
-                className="h-full bg-blue-500 rounded-full" 
-                style={{ width: `${data.totalItems > 0 ? (data.passedItems / data.totalItems) * 100 : 0}%` }}
-              />
-            </div>
-          </div>
-          {expanded ? <ChevronUp size={20} className="text-gray-400" /> : <ChevronDown size={20} className="text-gray-400" />}
+            {expanded ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
         </div>
       </div>
       
-      {expanded && (
-        <div className="divide-y divide-gray-100 dark:divide-gray-700">
-          {data.items.map((item, idx) => (
-            <div key={idx} className="p-6 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex items-center space-x-3">
-                  <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase ${
-                    item.status === 'pass' ? 'bg-green-100 text-green-600' :
-                    item.status === 'warning' ? 'bg-yellow-100 text-yellow-600' :
-                    item.status === 'info' ? 'bg-blue-100 text-blue-600' :
-                    'bg-red-100 text-red-600'
-                  }`}>
-                    {item.status === 'pass' ? '通过' : item.status === 'warning' ? '警告' : item.status === 'info' ? '信息' : '失败'}
-                  </span>
-                  <h4 className="font-semibold text-base">{item.category}</h4>
+      <AnimatePresence>
+        {expanded && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="border-t border-gray-100 dark:border-gray-800"
+          >
+            <div className="divide-y divide-gray-100 dark:divide-gray-800">
+              {data.items.map((item, idx) => (
+                <div key={idx} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors flex items-start space-x-4">
+                    <div className="mt-1 flex-shrink-0">
+                        {item.status === 'pass' ? (
+                            <CheckCircle size={16} className="text-green-500" />
+                        ) : item.status === 'warning' ? (
+                            <AlertTriangle size={16} className="text-yellow-500" />
+                        ) : item.status === 'info' ? (
+                            <Info size={16} className="text-blue-500" />
+                        ) : (
+                            <AlertTriangle size={16} className="text-red-500" />
+                        )}
+                    </div>
+                    <div className="flex-1">
+                        <div className="flex justify-between items-start">
+                            <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.category}</h4>
+                            {item.priority && item.status !== 'pass' && (
+                                <Badge color={item.priority === 'critical' ? 'red' : 'yellow'}>
+                                    {item.priority}
+                                </Badge>
+                            )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">{item.description}</p>
+                        
+                        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs bg-gray-50 dark:bg-gray-900/50 p-2 rounded border border-gray-100 dark:border-gray-800">
+                            <div>
+                                <span className="text-gray-400 block mb-0.5 uppercase text-[10px] tracking-wider">Current State</span>
+                                <span className="font-mono text-gray-700 dark:text-gray-300 break-all">{item.currentState}</span>
+                            </div>
+                            {item.status !== 'pass' && (
+                                <div>
+                                    <span className="text-gray-400 block mb-0.5 uppercase text-[10px] tracking-wider">Suggestion</span>
+                                    <span className="text-blue-600 dark:text-blue-400">{item.suggestion}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
-                {item.priority && item.status !== 'pass' && (
-                  <span className={`text-xs font-medium px-2 py-1 rounded border ${
-                    item.priority === 'critical' || item.priority === 'high' 
-                      ? 'border-red-200 text-red-600 bg-red-50' 
-                      : 'border-yellow-200 text-yellow-600 bg-yellow-50'
-                  }`}>
-                    {item.priority === 'critical' ? '严重' : item.priority === 'high' ? '高优先级' : '中优先级'}
-                  </span>
-                )}
-              </div>
-              
-              <p className="text-sm text-gray-500 mb-2">{item.description}</p>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg text-sm">
-                <div>
-                  <span className="text-gray-400 block text-xs mb-1">当前状态:</span>
-                  <span className="font-medium text-gray-800 dark:text-gray-200 break-all">{item.currentState}</span>
-                </div>
-                {item.status !== 'pass' && (
-                  <div>
-                    <span className="text-gray-400 block text-xs mb-1">修复建议:</span>
-                    <span className="text-blue-600 dark:text-blue-400">{item.suggestion}</span>
-                  </div>
-                )}
-              </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
-    </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </Card>
   );
 };
 
@@ -254,16 +277,11 @@ const SeoAudit = () => {
     const loadHistory = async () => {
       const savedHistory = await getAuditHistory();
       setHistory(savedHistory);
-      const unique = [...new Set(savedHistory.map(h => h.domain))].slice(0, 3);
+      const unique = [...new Set(savedHistory.map(h => h.domain))].slice(0, 5);
       setRecentDomains(unique);
     };
     loadHistory();
   }, []);
-
-  const validateDomain = (input) => {
-    const pattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/;
-    return pattern.test(input);
-  };
 
   const handleAudit = async (e) => {
     e?.preventDefault();
@@ -275,24 +293,13 @@ const SeoAudit = () => {
       setDomain(targetDomain);
     }
 
-    if (!validateDomain(targetDomain)) {
-      setError('请输入有效的域名格式 (如 example.com)');
-      return;
-    }
-
     setError(null);
     setLoading(true);
     setResult(null);
     setProgress(1);
 
     const stepInterval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 4) {
-          clearInterval(stepInterval);
-          return 4;
-        }
-        return prev + 1;
-      });
+      setProgress(prev => (prev >= 4 ? 4 : prev + 1));
     }, 800);
 
     try {
@@ -302,7 +309,7 @@ const SeoAudit = () => {
       
       const newHistory = await saveAuditResult(data);
       setHistory(newHistory);
-      setRecentDomains([...new Set(newHistory.map(h => h.domain))].slice(0, 3));
+      setRecentDomains([...new Set(newHistory.map(h => h.domain))].slice(0, 5));
       
       setTimeout(() => {
         setLoading(false);
@@ -312,66 +319,64 @@ const SeoAudit = () => {
       clearInterval(stepInterval);
       setLoading(false);
       setProgress(0);
-      setError(err.message || '审计过程中发生未知错误，请重试。');
+      setError(err.message || 'Audit failed. Please try again.');
     }
   };
 
   const handleDeleteHistory = async (timestamp) => {
-    if (window.confirm('确定要删除这条记录吗？')) {
+    if (window.confirm('Delete this record?')) {
       const newHistory = await deleteAuditRecord(timestamp);
       setHistory(newHistory);
     }
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 overflow-hidden">
-      {/* Sidebar History */}
-      <div className="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col flex-shrink-0">
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-          <h2 className="font-bold flex items-center">
-            <History className="mr-2 text-blue-500" size={18} />
-            历史记录
-          </h2>
-          <Link to="/" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-            <ArrowLeft size={18} />
+    <div className="flex h-screen bg-white dark:bg-black text-black dark:text-white font-sans selection:bg-blue-100 selection:text-blue-900">
+      {/* Sidebar - Vercel Style Project List */}
+      <div className="w-64 border-r border-gray-200 dark:border-gray-800 flex flex-col flex-shrink-0 bg-gray-50/50 dark:bg-black">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between h-16">
+          <div className="font-bold flex items-center text-sm tracking-wide">
+            <Activity className="mr-2" size={16} />
+            SEO AUDIT
+          </div>
+          <Link to="/" className="text-gray-400 hover:text-black dark:hover:text-white transition-colors">
+            <ArrowLeft size={16} />
           </Link>
         </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        
+        <div className="flex-1 overflow-y-auto p-3 space-y-1">
+          <div className="text-[10px] font-mono text-gray-400 uppercase tracking-widest px-2 mb-2 mt-2">History</div>
           {history.length === 0 ? (
-            <div className="text-center py-10 text-gray-400 text-sm">暂无审计记录</div>
+            <div className="px-2 py-4 text-xs text-gray-400">No recent audits</div>
           ) : (
             history.map((item, idx) => (
               <div 
                 key={idx} 
                 onClick={() => setResult(item)}
-                className={`p-3 rounded-lg cursor-pointer border transition-all ${
+                className={`group px-3 py-2.5 rounded-md cursor-pointer text-sm flex justify-between items-center transition-all ${
                   result && result.timestamp === item.timestamp
-                    ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800'
-                    : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 hover:border-blue-200'
+                    ? 'bg-white dark:bg-gray-900 shadow-sm text-black dark:text-white ring-1 ring-gray-200 dark:ring-gray-800'
+                    : 'text-gray-500 hover:text-black dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-900'
                 }`}
               >
-                <div className="flex justify-between items-start mb-1">
-                  <span className="font-medium text-sm truncate w-40" title={item.domain}>
-                    {item.domain.replace(/^https?:\/\//, '')}
-                  </span>
-                  <span className={`text-xs font-bold ${
-                    (item.overallScore?.overall || item.score || 0) >= 80 ? 'text-green-500' : 
-                    (item.overallScore?.overall || item.score || 0) >= 60 ? 'text-yellow-500' : 'text-red-500'
-                  }`}>
-                    {item.overallScore?.overall || item.score || 0}分
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-xs text-gray-400">
-                  <span>{new Date(item.timestamp).toLocaleDateString()}</span>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteHistory(item.timestamp);
-                    }}
-                    className="hover:text-red-500 p-1"
-                  >
-                    <Trash2 size={12} />
-                  </button>
+                <span className="truncate w-32 font-medium">
+                  {item.domain.replace(/^https?:\/\/(www\.)?/, '')}
+                </span>
+                <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className={`text-[10px] font-mono ${
+                        (item.overallScore?.overall || 0) >= 80 ? 'text-green-500' : 'text-gray-400'
+                    }`}>
+                        {item.overallScore?.overall || 0}
+                    </span>
+                    <button 
+                        onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteHistory(item.timestamp);
+                        }}
+                        className="text-gray-400 hover:text-red-500"
+                    >
+                        <Trash2 size={12} />
+                    </button>
                 </div>
               </div>
             ))
@@ -380,29 +385,35 @@ const SeoAudit = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Header */}
-        <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-          <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-            <h1 className="text-lg font-bold flex items-center">
-              <Activity className="mr-2 text-blue-500" />
-              SEO 深度审计工具
-            </h1>
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+        {/* Sticky Header */}
+        <header className="sticky top-0 z-10 bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
+          <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+                <h1 className="text-sm font-bold tracking-tight">
+                {result ? result.domain : 'New Audit'}
+                </h1>
+                {result && (
+                    <Badge color={result.overallScore?.overall >= 80 ? 'green' : 'gray'}>
+                        {result.overallScore?.overall >= 80 ? 'Excellent' : 'Audit Complete'}
+                    </Badge>
+                )}
+            </div>
             {result && (
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-3">
                 <button 
                   onClick={() => window.print()} 
-                  className="flex items-center px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+                  className="p-2 text-gray-500 hover:text-black dark:hover:text-white transition-colors"
+                  title="Print"
                 >
-                  <FileText size={16} className="mr-2" />
-                  打印
+                  <FileText size={18} />
                 </button>
                 <button 
                   onClick={() => exportToCsv(result)} 
-                  className="flex items-center px-3 py-1.5 text-sm bg-blue-50 dark:bg-blue-900/30 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                  className="flex items-center px-3 py-1.5 text-xs font-medium bg-black text-white dark:bg-white dark:text-black rounded-md hover:opacity-80 transition-opacity"
                 >
-                  <Download size={16} className="mr-2" />
-                  导出 CSV
+                  <Download size={14} className="mr-1.5" />
+                  Export CSV
                 </button>
               </div>
             )}
@@ -410,144 +421,136 @@ const SeoAudit = () => {
         </header>
 
         {/* Scrollable Body */}
-        <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-gray-900">
-          <div className="max-w-6xl mx-auto">
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-5xl mx-auto px-6 py-12">
             
-            {/* Search Input */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 mb-8 text-center">
-              {!result && (
-                <>
-                  <h2 className="text-2xl font-bold mb-2">输入域名，一键诊断</h2>
-                  <p className="text-gray-500 mb-6 text-sm">
-                    基于 Google Core Web Vitals 与 GEO 技术标准，全方位检测站点健康度。
-                  </p>
-                </>
-              )}
+            {/* Search Input Area */}
+            <div className={`transition-all duration-500 ${result ? 'mb-12' : 'min-h-[60vh] flex flex-col justify-center'}`}>
+              <div className="text-center mb-8">
+                {!result && !loading && (
+                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                        <h2 className="text-4xl font-bold mb-4 tracking-tight">SEO Performance Audit</h2>
+                        <p className="text-gray-500 max-w-lg mx-auto">
+                            Analyze your site's performance, SEO, and accessibility with Google Core Web Vitals and AI-readiness checks.
+                        </p>
+                    </motion.div>
+                )}
+              </div>
               
-              <form onSubmit={handleAudit} className="max-w-2xl mx-auto relative">
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Search className="text-gray-400" size={20} />
-                  </div>
-                  <input
-                    type="text"
-                    value={domain}
-                    onChange={(e) => {
-                      setDomain(e.target.value);
-                      if (error) setError(null);
-                    }}
-                    placeholder="example.com"
-                    className={`w-full pl-12 pr-32 py-4 text-lg bg-gray-50 dark:bg-gray-900 border rounded-xl focus:outline-none focus:ring-2 transition-all ${
-                      error ? 'border-red-300 focus:ring-red-200' : 'border-gray-200 dark:border-gray-700 focus:ring-blue-500'
-                    }`}
-                  />
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="absolute right-2 top-2 bottom-2 bg-blue-600 hover:bg-blue-700 text-white px-6 rounded-lg font-medium transition-colors disabled:opacity-70 flex items-center"
-                  >
-                    {loading ? '审计中...' : '开始审计'}
-                  </button>
+              <div className="max-w-2xl mx-auto w-full relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  {loading ? <Loader2 className="animate-spin text-blue-500" size={20} /> : <Search className="text-gray-400" size={20} />}
                 </div>
-                
+                <form onSubmit={handleAudit}>
+                    <input
+                        type="text"
+                        value={domain}
+                        onChange={(e) => {
+                            setDomain(e.target.value);
+                            if (error) setError(null);
+                        }}
+                        placeholder="Enter domain (e.g. vercel.com)"
+                        disabled={loading}
+                        className="w-full pl-12 pr-4 py-4 text-lg bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg shadow-[0_0_0_1px_rgba(0,0,0,0.0)] focus:shadow-[0_0_0_2px_rgba(0,0,0,1)] dark:focus:shadow-[0_0_0_2px_rgba(255,255,255,1)] outline-none transition-all placeholder:text-gray-300 dark:placeholder:text-gray-700"
+                    />
+                </form>
                 {error && (
-                  <div className="absolute left-0 -bottom-8 flex items-center text-red-500 text-sm animate-fade-in">
-                    <AlertTriangle size={14} className="mr-1" />
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }} 
+                    animate={{ opacity: 1, y: 0 }}
+                    className="absolute top-full mt-2 left-0 flex items-center text-red-500 text-xs font-medium"
+                  >
+                    <AlertTriangle size={12} className="mr-1" />
                     {error}
-                  </div>
+                  </motion.div>
                 )}
+              </div>
 
-                {!result && recentDomains.length > 0 && !loading && (
-                  <div className="mt-4 flex items-center justify-center space-x-2 text-sm">
-                    <span className="text-gray-400">最近审计：</span>
-                    {recentDomains.map(d => (
-                      <button
-                        key={d}
-                        type="button"
-                        onClick={() => setDomain(d)}
-                        className="px-2 py-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 rounded text-gray-600 transition-colors"
-                      >
-                        {d.replace(/^https?:\/\//, '')}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </form>
-
-              {loading && (
-                <div className="mt-8 animate-fade-in">
-                  <ProgressStep currentStep={progress} />
-                  <p className="text-sm text-gray-500 animate-pulse">
-                    正在深入分析 {domain} 的各项指标...
-                  </p>
-                </div>
+              {!result && recentDomains.length > 0 && !loading && (
+                <motion.div 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.2 }}
+                    className="mt-8 flex flex-wrap justify-center gap-2"
+                >
+                  {recentDomains.map(d => (
+                    <button
+                      key={d}
+                      onClick={() => setDomain(d)}
+                      className="px-3 py-1 text-xs text-gray-500 border border-gray-200 dark:border-gray-800 rounded-full hover:border-gray-400 dark:hover:border-gray-600 hover:text-black dark:hover:text-white transition-colors"
+                    >
+                      {d.replace(/^https?:\/\//, '')}
+                    </button>
+                  ))}
+                </motion.div>
               )}
+
+              {loading && <ProgressStep currentStep={progress} />}
             </div>
 
-            {/* Results */}
+            {/* Results Grid */}
             {result && !loading && (
-              <div className="space-y-6 animate-fade-in-up">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="space-y-8"
+              >
                 
-                {/* 1. Score Cards */}
+                {/* 1. Metrics Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <MetricCard 
-                    title="综合评分" 
+                    title="Overall Score" 
                     value={result.overallScore?.overall || 0} 
-                    icon={<Activity size={24} />} 
-                    subtext="加权总分"
+                    icon={Activity}
                   />
                   <MetricCard 
-                    title="桌面端性能" 
+                    title="Desktop Perf" 
                     value={result.overallScore?.desktop || 0} 
-                    icon={<Globe size={24} />} 
-                    subtext="Google PSI Desktop"
+                    icon={Globe}
                   />
                   <MetricCard 
-                    title="移动端性能" 
+                    title="Mobile Perf" 
                     value={result.overallScore?.mobile || 0} 
-                    icon={<Smartphone size={24} />} 
-                    subtext="Google PSI Mobile"
+                    icon={Smartphone}
                   />
                   <MetricCard 
-                    title="技术合规" 
+                    title="Tech Health" 
                     value={result.overallScore?.codeServer || 0} 
-                    icon={<Code size={24} />} 
-                    subtext="代码与服务器配置"
+                    icon={Code}
                   />
                 </div>
 
-                {/* 2. Traffic Analysis (Prominent Position) */}
+                {/* 2. Traffic Analysis */}
                 {result.sections?.traffic && (
                     <TrafficSection data={result.sections?.traffic} />
                 )}
 
-                {/* 3. Summary & Top Issues */}
+                {/* 3. Summary Block - Vercel style split */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="col-span-2 bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-100 dark:border-gray-700">
-                    <h3 className="text-lg font-bold mb-4 flex items-center">
-                      <Layout className="mr-2 text-blue-500" size={20} />
-                      审计概览
+                  <Card className="col-span-2 p-6">
+                    <h3 className="text-sm font-bold mb-4 flex items-center">
+                      <Layout className="mr-2 text-gray-400" size={18} />
+                      Audit Overview
                     </h3>
                     <div className="space-y-4">
-                      <div className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
-                        <span className="text-gray-500">健康状况评级</span>
-                        <span className={`font-bold text-lg ${
-                          result.summary?.health === '优秀' ? 'text-green-500' : 
-                          result.summary?.health === '良好' ? 'text-blue-500' : 
-                          'text-red-500'
-                        }`}>
+                      <div className="flex items-center space-x-2 text-sm">
+                        <span className="text-gray-500">Health Status:</span>
+                        <Badge color={
+                          result.summary?.health === '优秀' ? 'green' : 
+                          result.summary?.health === '良好' ? 'blue' : 'red'
+                        }>
                           {result.summary?.health}
-                        </span>
+                        </Badge>
                       </div>
                       
-                      <div>
-                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">关键问题 (Top 5):</p>
-                        <ul className="space-y-2">
+                      <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
+                        <p className="text-xs font-mono text-gray-400 uppercase tracking-widest mb-3">Top Issues</p>
+                        <ul className="space-y-3">
                           {result.summary?.topIssues?.map((issue, idx) => (
-                            <li key={idx} className="flex items-start text-sm">
-                              <AlertTriangle size={14} className="text-red-500 mt-0.5 mr-2 flex-shrink-0" />
-                              <span className="text-gray-600 dark:text-gray-400">
-                                <span className="font-medium text-gray-900 dark:text-gray-100">{issue.category}: </span>
+                            <li key={idx} className="flex items-start text-sm group">
+                              <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-red-500 mr-3 flex-shrink-0" />
+                              <span className="text-gray-600 dark:text-gray-300">
+                                <span className="font-semibold text-black dark:text-white mr-1">{issue.category}:</span>
                                 {issue.issue}
                               </span>
                             </li>
@@ -555,57 +558,61 @@ const SeoAudit = () => {
                         </ul>
                       </div>
                     </div>
-                  </div>
+                  </Card>
 
-                  <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-100 dark:border-gray-700">
-                    <h3 className="text-lg font-bold mb-4 flex items-center">
-                      <List className="mr-2 text-orange-500" size={20} />
-                      建议行动
+                  <Card className="p-6 bg-gray-50/50 dark:bg-gray-900/20 border-dashed">
+                    <h3 className="text-sm font-bold mb-4 flex items-center">
+                      <List className="mr-2 text-gray-400" size={18} />
+                      Recommendations
                     </h3>
                     <div className="space-y-3">
                       {result.summary?.recommendations?.map((rec, idx) => (
-                        <div key={idx} className="flex items-start p-3 bg-blue-50 dark:bg-blue-900/10 rounded-lg text-sm text-blue-700 dark:text-blue-300">
-                          <Info size={16} className="mr-2 mt-0.5 flex-shrink-0" />
+                        <div key={idx} className="flex items-start text-xs text-gray-600 dark:text-gray-400">
+                          <CheckCircle size={14} className="mr-2 mt-0.5 text-blue-500 flex-shrink-0" />
                           {rec}
                         </div>
                       ))}
                       {(!result.summary?.recommendations || result.summary.recommendations.length === 0) && (
-                        <div className="text-center text-gray-400 py-4">暂无特别建议</div>
+                        <div className="text-center text-gray-400 py-4 text-xs">No specific recommendations</div>
                       )}
                     </div>
-                  </div>
+                  </Card>
                 </div>
 
-                {/* 3. Detailed Sections */}
-                <div className="space-y-6">
-                  <h2 className="text-xl font-bold ml-1">详细审计报告</h2>
+                {/* 4. Accordion Details */}
+                <div className="space-y-2">
+                  <h2 className="text-lg font-bold mb-4 px-1">Detailed Report</h2>
                   
                   <AuditSection 
-                    title="1. 程序代码与服务器" 
+                    title="Code & Server Configuration" 
                     icon={Code} 
-                    data={result.sections?.codeServer} 
+                    data={result.sections?.codeServer}
+                    index={0} 
                   />
                   
                   <AuditSection 
-                    title="2. 网站内容优化" 
+                    title="Content Optimization" 
                     icon={FileText} 
-                    data={result.sections?.content} 
+                    data={result.sections?.content}
+                    index={1} 
                   />
                   
                   <AuditSection 
-                    title="3. 移动端适配" 
+                    title="Mobile Compatibility" 
                     icon={Smartphone} 
-                    data={result.sections?.mobile} 
+                    data={result.sections?.mobile}
+                    index={2} 
                   />
 
                   <AuditSection 
-                    title="4. AI 搜索准备度 (AISO)" 
+                    title="AI Search Readiness (AISO)" 
                     icon={Bot} 
-                    data={result.sections?.ai} 
+                    data={result.sections?.ai}
+                    index={3} 
                   />
                 </div>
 
-              </div>
+              </motion.div>
             )}
           </div>
         </div>
