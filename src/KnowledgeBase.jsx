@@ -26,14 +26,14 @@ import RichEditor from './components/RichEditor';
 import { ConfirmModal, InputModal } from './components/Modals';
 
 // Simple FileTree Component
-const FileTree = ({ items, level = 0, onSelect, onLoadChildren, onDelete, selectedPath, multiSelect, selectedItems, onToggleSelect }) => {
-  const [expanded, setExpanded] = useState({});
-
+const FileTree = ({ items, level = 0, onSelect, onLoadChildren, onDelete, selectedPath, multiSelect, selectedItems, onToggleSelect, expandedPaths, onToggleExpand }) => {
   const toggle = async (item) => {
-    const isExpanding = !expanded[item.path];
-    setExpanded(prev => ({ ...prev, [item.path]: isExpanding }));
+    if (onToggleExpand) {
+        onToggleExpand(item.path);
+    }
     
-    if (isExpanding && item.children && item.children.length === 0 && onLoadChildren) {
+    // Check if expanding and need to load children
+    if (!expandedPaths[item.path] && item.children && item.children.length === 0 && onLoadChildren) {
       await onLoadChildren(item);
     }
   };
@@ -63,7 +63,7 @@ const FileTree = ({ items, level = 0, onSelect, onLoadChildren, onDelete, select
               type="button"
             >
               {item.type === 'folder' ? (
-                expanded[item.path] ? <ChevronDown size={14} /> : <ChevronRight size={14} />
+                expandedPaths[item.path] ? <ChevronDown size={14} /> : <ChevronRight size={14} />
               ) : null}
             </button>
             {multiSelect && (
@@ -87,9 +87,21 @@ const FileTree = ({ items, level = 0, onSelect, onLoadChildren, onDelete, select
               <Trash2 size={12} />
             </button>
           </div>
-          {item.type === 'folder' && expanded[item.path] && (
+          {item.type === 'folder' && expandedPaths[item.path] && (
             item.children && item.children.length > 0 ? (
-              <FileTree items={item.children} level={level + 1} onSelect={onSelect} onLoadChildren={onLoadChildren} onDelete={onDelete} selectedPath={selectedPath} multiSelect={multiSelect} selectedItems={selectedItems} onToggleSelect={onToggleSelect} />
+              <FileTree 
+                items={item.children} 
+                level={level + 1} 
+                onSelect={onSelect} 
+                onLoadChildren={onLoadChildren} 
+                onDelete={onDelete} 
+                selectedPath={selectedPath} 
+                multiSelect={multiSelect} 
+                selectedItems={selectedItems} 
+                onToggleSelect={onToggleSelect}
+                expandedPaths={expandedPaths}
+                onToggleExpand={onToggleExpand}
+              />
             ) : (
               <div className={`text-xs text-gray-400 py-1 ${level > 0 ? 'ml-10' : 'ml-8'}`}>
                 (Empty)
@@ -147,6 +159,7 @@ const KnowledgeBase = () => {
   const [manageOpen, setManageOpen] = useState(false);
   const [multiSelect, setMultiSelect] = useState(false);
   const [selectedItems, setSelectedItems] = useState({});
+  const [expandedPaths, setExpandedPaths] = useState({});
 
   useEffect(() => {
     const token = import.meta.env.VITE_GITHUB_TOKEN;
@@ -454,14 +467,13 @@ const KnowledgeBase = () => {
                 onClick={() => {
                     // Find the SEO-Audits folder in fileSystem
                     const seoFolder = fileSystem.find(f => f.name === 'SEO-Audits' && f.type === 'folder');
+                    
                     if (seoFolder) {
-                        // Expand it by selecting/toggling
-                        // Since FileTree handles toggle internally via onSelect if we pass logic,
-                        // but here we are outside FileTree.
-                        // We can just open the file manager and let user browse, 
-                        // OR we can implement a specific view for it.
-                        // For now, let's just ensure File Manager is open.
                         setManageOpen(true);
+                        // Force expand
+                        setExpandedPaths(prev => ({ ...prev, [seoFolder.path]: true }));
+                        // Load children if not loaded
+                        handleLoadChildren(seoFolder);
                     } else {
                         showToast('暂无 SEO 审计报告', 'info');
                     }
@@ -531,6 +543,10 @@ const KnowledgeBase = () => {
                       next[item.path] = item;
                       return next;
                     });
+                  }}
+                  expandedPaths={expandedPaths}
+                  onToggleExpand={(path) => {
+                    setExpandedPaths(prev => ({ ...prev, [path]: !prev[path] }));
                   }}
                 />
               </div>
