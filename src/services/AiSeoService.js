@@ -29,14 +29,16 @@ export const performAiSeoAnalysis = async (domain) => {
     // 5. 内容可提取性检查 (Step 3: Content Extractability Check)
     const extractability = analyzeContentStructure(pageData.html, pageData.markdown);
 
-    // 6. 计算得分
-    const score = calculateAiScore(botAccess, citationPatterns, extractability);
+    // 6. 计算得分（现在返回分维度的细化得分）
+    const dimensionScores = calculateDimensionScores(botAccess, citationPatterns, extractability);
+    const overallScore = Math.round((dimensionScores.aiVisibility + dimensionScores.structure + dimensionScores.authority + dimensionScores.extractability + dimensionScores.freshness) / 5);
 
     // Simplified result structure for the "AI SEO 文章检测工具" requirement
     const result = {
       domain,
       timestamp,
-      score, // Still kept for internal logic, but output will focus on pass/fail
+      score: overallScore,
+      dimensionScores, // 新增：各维度分数
       passedItems: [],
       failedItems: []
     };
@@ -150,9 +152,8 @@ export const performAiSeoAnalysis = async (domain) => {
         extractability
     };
     
-    // 7. 使用大模型进行深度分析 (Optional for this simplified view, but good to keep)
-    // const llmAnalysis = await analyzeWithLLM(pageData.markdown, result);
-    // result.sections.llmAnalysis = llmAnalysis;
+    // 7. 内容类型分析 (新增)
+    result.contentAnalysis = analyzeContentType(pageData.markdown, result);
 
     // 自动保存报告
     await saveAiSeoReport(result);
@@ -391,27 +392,115 @@ const analyzeSchema = (html) => {
 };
 
 /**
- * 6. 计算总分
+ * 6. 计算各维度得分
  */
-const calculateAiScore = (botAccess, citationPatterns, extractability) => {
-    let score = 0;
-    
-    // Bot Access (20%)
+const calculateDimensionScores = (botAccess, citationPatterns, extractability) => {
+    // AI 可见性 (Bot Access)
     const blockedCount = botAccess.bots.filter(b => b.status === 'blocked').length;
-    score += (blockedCount === 0 ? 20 : Math.max(0, 20 - blockedCount * 5));
+    const aiVisibility = blockedCount === 0 ? 100 : Math.max(0, 100 - blockedCount * 15);
 
-    // Citation Patterns (60%)
-    score += (citationPatterns.structure.score / 100) * 15;
-    score += (citationPatterns.authority.score / 100) * 15;
-    score += (citationPatterns.freshness.score / 100) * 10;
-    score += (citationPatterns.schema.score / 100) * 10;
-    score += (citationPatterns.thirdParty.score / 100) * 10;
+    // 内容结构
+    const structure = citationPatterns.structure.score;
 
-    // Extractability (20%)
-    score += (extractability.readability.ratio / 100) * 10;
-    score += (extractability.qaPattern ? 10 : 0);
+    // 权威性
+    const authority = citationPatterns.authority.score;
 
-    return Math.round(score);
+    // 可提取性
+    const extractability_score = Math.round((extractability.readability.ratio + (extractability.qaPattern ? 20 : 0)) / 1.2);
+
+    // 内容新鲜度
+    const freshness = citationPatterns.freshness.score;
+
+    return {
+        aiVisibility,
+        structure,
+        authority,
+        extractability: extractability_score,
+        freshness
+    };
+};
+
+/**
+ * 内容类型与特征分析 (新增)
+ */
+const analyzeContentType = (markdown, currentResult) => {
+    const wordCount = markdown.split(/\s+/).length;
+    const hasStats = /\d+%|\d{4}年|\d+个/.test(markdown);
+    const hasQA = /\?|How to|What is/i.test(markdown);
+    const hasList = markdown.includes('- ') || markdown.includes('1.');
+    const hasComparison = /vs\.|versus|对比|相比/i.test(markdown);
+    
+    // 判断内容类型
+    let contentType = {
+        primary: '',
+        characteristics: []
+    };
+
+    if (hasStats && wordCount > 1000) {
+        contentType.primary = '数据报告类';
+        contentType.characteristics = ['包含具体数据', '明确来源', '发布时间'];
+    } else if (hasQA && hasList) {
+        contentType.primary = '问答/指南类';
+        contentType.characteristics = ['采用"问题-步骤-结论"结构', '使用明确的标题层级', '分步点为导向'];
+    } else if (hasComparison) {
+        contentType.primary = '对比/评测类';
+        contentType.characteristics = ['包含具体数字对比', '中立客观', '逻辑清晰'];
+    } else if (hasList) {
+        contentType.primary = '富媒体内容';
+        contentType.characteristics = ['配有清晰的结构', '带逐字稿的描述', '加入ALT文本说明'];
+    } else {
+        contentType.primary = '热点/行业动态类';
+        contentType.characteristics = ['明确标注时间', '聚焦"新变化+影响+应对方法"'];
+    }
+
+    // AI 偏好的内容特征
+    const aiPreferredTraits = [
+        { name: '中立性', met: !/(我们|我司|本公司)/i.test(markdown.slice(0, 500)), desc: '客观表述，避免过度营销或主观判断' },
+        { name: '结构化', met: hasList || /<table/i.test(markdown), desc: '逻辑清晰，层次分明，易于AI解析' },
+        { name: '可折解', met: markdown.split('\n\n').length > 5, desc: '每个段落都是独立的"可引用点"' },
+        { name: '可验证', met: hasStats, desc: '数据可查，事实准确，来源可靠' },
+        { name: '场景明确', met: wordCount > 300, desc: '内容具体，有实际应用价值，避免抽象概念' }
+    ];
+
+    // 优化建议（分阶段）
+    const optimizationPhases = [
+        {
+            phase: '第一阶段 (1-2周)',
+            title: '基础优化',
+            tasks: [
+                { done: currentResult.sections.botAccess.bots.every(b => b.status === 'allowed'), text: '修复robots.txt错误' },
+                { done: currentResult.sections.citationPatterns.schema.score > 0, text: '添加或优化结构化数据' },
+                { done: aiPreferredTraits.find(t => t.name === '可折解')?.met, text: '添加清晰的首段定义' },
+                { done: currentResult.sections.citationPatterns.structure.items.find(i => i.name === 'H2 标题结构')?.passed, text: '优化标题结构' }
+            ]
+        },
+        {
+            phase: '第二阶段 (3-4周)',
+            title: '内容重构',
+            tasks: [
+                { done: currentResult.sections.citationPatterns.structure.items.find(i => i.name === '表格数据')?.passed, text: '转换为结构化元素' },
+                { done: currentResult.sections.citationPatterns.authority.items.find(i => i.name === '统计数据')?.passed, text: '添加统计数据和权威来源' },
+                { done: currentResult.sections.citationPatterns.authority.items.find(i => i.name === '作者署名')?.passed, text: '完善作者信息和专业资质' },
+                { done: hasQA, text: '创建FAQ部分' }
+            ]
+        },
+        {
+            phase: '第三阶段 (2-3个月)',
+            title: '深度优化',
+            tasks: [
+                { done: false, text: '竞争对手分析' },
+                { done: false, text: '创建AI友好内容' },
+                { done: false, text: '建立内容更新机制' },
+                { done: false, text: '扩展第三方平台存在' }
+            ]
+        }
+    ];
+
+    return {
+        contentType,
+        aiPreferredTraits,
+        optimizationPhases
+    };
 };
 
 /**

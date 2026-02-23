@@ -17,7 +17,10 @@ import {
   Globe,
   Layout,
   Star,
-  Zap
+  Zap,
+  Download,
+  Lightbulb,
+  XCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { performAiSeoAnalysis } from '../../services/AiSeoService';
@@ -81,6 +84,165 @@ const ChecklistItem = ({ passed, label, desc }) => (
         </div>
     </div>
 );
+
+// 新增：内容分析组件
+const ContentAnalysisSection = ({ data }) => {
+    const [activeTab, setActiveTab] = useState('type');
+
+    return (
+        <Card className="p-6">
+            <h3 className="text-xl font-bold mb-4">高价值内容类型与最佳实践</h3>
+            
+            {/* Tabs */}
+            <div className="flex space-x-1 border-b border-gray-200 dark:border-gray-800 mb-6">
+                {[
+                    { key: 'type', label: '内容类型' },
+                    { key: 'traits', label: '内容特征' },
+                    { key: 'optimization', label: '优化建议' }
+                ].map(tab => (
+                    <button
+                        key={tab.key}
+                        onClick={() => setActiveTab(tab.key)}
+                        className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                            activeTab === tab.key
+                                ? 'border-black dark:border-white text-black dark:text-white'
+                                : 'border-transparent text-gray-500 hover:text-black dark:hover:text-white'
+                        }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Tab Content */}
+            <div className="min-h-[200px]">
+                {activeTab === 'type' && (
+                    <div>
+                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800 mb-4">
+                            <div className="flex items-start">
+                                <Lightbulb className="text-blue-600 dark:text-blue-400 mr-3 mt-1 flex-shrink-0" size={20} />
+                                <div>
+                                    <h4 className="text-sm font-bold text-blue-900 dark:text-blue-100 mb-1">识别的内容类型</h4>
+                                    <p className="text-sm text-blue-800 dark:text-blue-200">{data.contentType.primary}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="space-y-3">
+                            <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider">典型特征</h5>
+                            {data.contentType.characteristics.map((char, idx) => (
+                                <div key={idx} className="flex items-start text-sm text-gray-700 dark:text-gray-300">
+                                    <span className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1.5 mr-2 flex-shrink-0" />
+                                    {char}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'traits' && (
+                    <div className="space-y-4">
+                        <h5 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">AI偏好的内容特征</h5>
+                        {data.aiPreferredTraits.map((trait, idx) => (
+                            <div key={idx} className="flex items-start">
+                                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-800 mr-3 flex-shrink-0 mt-0.5">
+                                    {trait.met ? (
+                                        <CheckCircle size={14} className="text-green-500" />
+                                    ) : (
+                                        <XCircle size={14} className="text-gray-400" />
+                                    )}
+                                </div>
+                                <div className="flex-1">
+                                    <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{trait.name}</div>
+                                    <div className="text-xs text-gray-500 mt-0.5">{trait.desc}</div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {activeTab === 'optimization' && (
+                    <div className="space-y-6">
+                        {data.optimizationPhases.map((phase, idx) => (
+                            <div key={idx}>
+                                <h5 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-3">{phase.phase} - {phase.title}</h5>
+                                <ul className="space-y-2">
+                                    {phase.tasks.map((task, taskIdx) => (
+                                        <li key={taskIdx} className="flex items-start text-sm">
+                                            <span className={`mr-2 mt-0.5 ${task.done ? 'text-green-500' : 'text-gray-400'}`}>
+                                                {task.done ? '✓' : '▸'}
+                                            </span>
+                                            <span className={task.done ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-300'}>
+                                                {task.text}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </Card>
+    );
+};
+
+// 新增：下载报告功能
+const downloadReport = (result) => {
+    let md = `# AI 搜索内容合规检测报告\n\n`;
+    md += `**域名:** ${result.domain}\n`;
+    md += `**检测时间:** ${new Date(result.timestamp).toLocaleString('zh-CN')}\n`;
+    md += `**总分:** ${result.score}/100\n\n`;
+
+    md += `## 检测维度得分\n\n`;
+    md += `- **AI可见性:** ${result.dimensionScores.aiVisibility}%\n`;
+    md += `- **内容结构:** ${result.dimensionScores.structure}%\n`;
+    md += `- **权威性:** ${result.dimensionScores.authority}%\n`;
+    md += `- **可提取性:** ${result.dimensionScores.extractability}%\n`;
+    md += `- **内容新鲜度:** ${result.dimensionScores.freshness}%\n\n`;
+
+    md += `## ✅ 达标项 (${result.passedItems.length})\n\n`;
+    result.passedItems.forEach(item => {
+        md += `- ${item}\n`;
+    });
+
+    md += `\n## ❌ 未达标项 (${result.failedItems.length})\n\n`;
+    result.failedItems.forEach(item => {
+        md += `### ${item.issue}\n`;
+        md += `💡 **优化提示:** ${item.tip}\n\n`;
+    });
+
+    if (result.contentAnalysis) {
+        md += `## 内容类型分析\n\n`;
+        md += `**识别类型:** ${result.contentAnalysis.contentType.primary}\n\n`;
+        md += `**典型特征:**\n`;
+        result.contentAnalysis.contentType.characteristics.forEach(char => {
+            md += `- ${char}\n`;
+        });
+        
+        md += `\n## AI偏好内容特征\n\n`;
+        result.contentAnalysis.aiPreferredTraits.forEach(trait => {
+            md += `- [${trait.met ? 'x' : ' '}] **${trait.name}**: ${trait.desc}\n`;
+        });
+
+        md += `\n## 优化建议路线图\n\n`;
+        result.contentAnalysis.optimizationPhases.forEach(phase => {
+            md += `### ${phase.phase} - ${phase.title}\n\n`;
+            phase.tasks.forEach(task => {
+                md += `- [${task.done ? 'x' : ' '}] ${task.text}\n`;
+            });
+            md += `\n`;
+        });
+    }
+
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const filename = `AI_SEO_Report_${result.domain.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.md`;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+};
 
 // --- Sections ---
 
@@ -255,6 +417,11 @@ const AiSeoAudit = () => {
     });
   };
 
+  // Load history on mount
+  useEffect(() => {
+    refreshAiHistory();
+  }, []);
+
   return (
     <div className="flex h-full bg-white dark:bg-black text-black dark:text-white font-sans">
       {/* Sidebar History */}
@@ -275,7 +442,7 @@ const AiSeoAudit = () => {
                 >
                     <div className="font-medium truncate">{item.domain.replace(/^https?:\/\//, '')}</div>
                     <div className="flex justify-between items-center mt-1">
-                        <span className="text-[10px] text-gray-400">{new Date(item.timestamp).toLocaleDateString()}</span>
+                        <span className="text-[10px] text-gray-400">{new Date(item.timestamp).toLocaleDateString('zh-CN')}</span>
                         <span className={`text-[10px] font-bold ${
                             item.score >= 80 ? 'text-green-600' : item.score >= 50 ? 'text-yellow-600' : 'text-red-600'
                         }`}>
@@ -358,7 +525,34 @@ const AiSeoAudit = () => {
                 animate={{ opacity: 1 }}
                 className="space-y-6"
               >
-                {/* Simplified Output: Passed & Failed Lists */}
+                {/* 1. 检测维度与评估指标 (进度条可视化) */}
+                <Card className="p-6">
+                    <h3 className="text-xl font-bold mb-6">检测维度与评估指标</h3>
+                    <div className="space-y-5">
+                        {[
+                            { label: 'AI可见性', value: result.dimensionScores.aiVisibility, color: 'bg-blue-500' },
+                            { label: '内容结构', value: result.dimensionScores.structure, color: 'bg-purple-500' },
+                            { label: '权威性', value: result.dimensionScores.authority, color: 'bg-green-500' },
+                            { label: '可提取性', value: result.dimensionScores.extractability, color: 'bg-orange-500' },
+                            { label: '内容新鲜度', value: result.dimensionScores.freshness, color: 'bg-red-500' }
+                        ].map((dimension, idx) => (
+                            <div key={idx}>
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{dimension.label}</span>
+                                    <span className="text-lg font-bold text-gray-900 dark:text-white">{dimension.value}%</span>
+                                </div>
+                                <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                                    <div 
+                                        className={`h-full ${dimension.color} transition-all duration-1000`}
+                                        style={{ width: `${dimension.value}%` }}
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </Card>
+
+                {/* 2. 达标/未达标列表 */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Passed Items */}
                     <Card className="p-6 border-l-4 border-l-green-500">
@@ -404,6 +598,22 @@ const AiSeoAudit = () => {
                             )}
                         </ul>
                     </Card>
+                </div>
+
+                {/* 3. 高价值内容类型与最佳实践 (新增) */}
+                {result.contentAnalysis && (
+                    <ContentAnalysisSection data={result.contentAnalysis} />
+                )}
+
+                {/* 4. 下载报告按钮 */}
+                <div className="flex justify-center pt-4">
+                    <button
+                        onClick={() => downloadReport(result)}
+                        className="flex items-center space-x-2 px-6 py-3 bg-black text-white dark:bg-white dark:text-black rounded-lg hover:opacity-80 transition-all font-medium"
+                    >
+                        <Download size={18} />
+                        <span>下载完整报告 (Markdown)</span>
+                    </button>
                 </div>
 
               </motion.div>
