@@ -45,7 +45,11 @@ const FileTree = ({ items, level = 0, onSelect, onLoadChildren, onDelete, select
       {items.map((item) => (
         <div key={item.path} className="group relative">
           <div 
-            className={`flex items-center py-1.5 px-2 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer ${level > 0 ? 'ml-4' : ''} ${selectedPath === item.path ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600' : 'text-gray-700 dark:text-gray-300'}`}
+            className={`flex items-center py-1.5 px-2 cursor-pointer transition-all rounded-md ${level > 0 ? 'ml-4' : ''} ${
+              selectedPath === item.path 
+                ? 'bg-white dark:bg-gray-900 text-black dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-gray-800' 
+                : 'text-gray-500 dark:text-gray-400 hover:text-black dark:hover:text-white hover:bg-gray-200/50 dark:hover:bg-gray-800'
+            }`}
             onClick={() => {
               if (multiSelect) {
                 onToggleSelect(item);
@@ -55,7 +59,7 @@ const FileTree = ({ items, level = 0, onSelect, onLoadChildren, onDelete, select
             }}
           >
             <button
-              className="mr-1 text-gray-400 w-4 flex justify-center"
+              className={`mr-1 w-4 flex justify-center ${selectedPath === item.path ? 'text-black dark:text-white' : 'text-gray-400'}`}
               onClick={(e) => {
                 e.stopPropagation();
                 if (item.type === 'folder') toggle(item);
@@ -71,10 +75,10 @@ const FileTree = ({ items, level = 0, onSelect, onLoadChildren, onDelete, select
                 {selectedItems?.[item.path] ? <CheckSquare size={16} /> : <Square size={16} />}
               </span>
             )}
-            <span className="mr-2 text-blue-500">
+            <span className={`mr-2 ${selectedPath === item.path ? 'text-black dark:text-white' : 'text-gray-400'}`}>
               {item.type === 'folder' ? <Folder size={16} /> : <FileText size={16} />}
             </span>
-            <span className="truncate flex-1">{item.name}</span>
+            <span className="truncate flex-1 font-medium">{item.name}</span>
             
             {/* Delete Button (visible on hover) */}
             <button 
@@ -416,54 +420,66 @@ const KnowledgeBase = () => {
       />
 
       {/* Minimal Sidebar */}
-      <div className="w-64 flex-shrink-0 border-r border-gray-200 dark:border-gray-800 flex flex-col bg-gray-50 dark:bg-gray-900/50">
-        <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center">
-          <BookOpen size={18} className="mr-2 text-blue-600" />
-          <span className="font-bold text-gray-800 dark:text-gray-200">知识库</span>
+      <div className="w-64 flex-shrink-0 border-r border-gray-200 dark:border-gray-800 flex flex-col bg-gray-50/50 dark:bg-black">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center h-16">
+          <BookOpen size={16} className="mr-2 text-black dark:text-white" />
+          <span className="font-bold text-sm tracking-wide text-gray-900 dark:text-gray-100 uppercase">Knowledge Base</span>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-2">
-          <div className="text-xs font-bold text-gray-400 uppercase px-2 mb-2">Files</div>
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          <div className="text-[10px] font-bold text-gray-400 uppercase px-2 mb-2 mt-2">Files</div>
           <div className="space-y-1">
             <div
-              className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer ${viewMode === 'daily' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+              className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer transition-all ${
+                viewMode === 'daily' 
+                  ? 'bg-white dark:bg-gray-900 text-black dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-gray-800' 
+                  : 'text-gray-500 hover:text-black dark:hover:text-white hover:bg-gray-200/50 dark:hover:bg-gray-800'
+              }`}
               onClick={() => {
                 setViewMode('daily');
                 setActiveTopic(null);
                 setSelectedFile(null);
               }}
             >
-              <Calendar size={16} className="mr-2" />
+              <Calendar size={16} className={`mr-2 ${viewMode === 'daily' ? 'text-black dark:text-white' : 'text-gray-400'}`} />
               Daily
             </div>
 
             <div
-              className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer ${viewMode === 'topic' && activeTopic?.path === 'Projectkickoff.md' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+              className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer transition-all ${
+                viewMode === 'topic' && activeTopic?.path === 'Projectkickoff.md' 
+                  ? 'bg-white dark:bg-gray-900 text-black dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-gray-800' 
+                  : 'text-gray-500 hover:text-black dark:hover:text-white hover:bg-gray-200/50 dark:hover:bg-gray-800'
+              }`}
               onClick={() => {
                 setViewMode('topic');
                 setActiveTopic({ title: 'Projectkickoff', path: 'Projectkickoff.md' });
                 setSelectedFile(null);
               }}
             >
-              <FileText size={16} className="mr-2 text-orange-500" />
+              <FileText size={16} className={`mr-2 ${viewMode === 'topic' && activeTopic?.path === 'Projectkickoff.md' ? 'text-black dark:text-white' : 'text-gray-400'}`} />
               Projectkickoff
             </div>
 
             <div
-              className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer ${viewMode === 'topic' && activeTopic?.path === 'todolist.md' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+              className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer transition-all ${
+                viewMode === 'topic' && activeTopic?.path === 'todolist.md' 
+                  ? 'bg-white dark:bg-gray-900 text-black dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-gray-800' 
+                  : 'text-gray-500 hover:text-black dark:hover:text-white hover:bg-gray-200/50 dark:hover:bg-gray-800'
+              }`}
               onClick={() => {
                 setViewMode('topic');
                 setActiveTopic({ title: 'todolist', path: 'todolist.md' });
                 setSelectedFile(null);
               }}
             >
-              <FileText size={16} className="mr-2 text-green-500" />
+              <FileText size={16} className={`mr-2 ${viewMode === 'topic' && activeTopic?.path === 'todolist.md' ? 'text-black dark:text-white' : 'text-gray-400'}`} />
               todolist
             </div>
 
             {/* 常驻 SEO Audit Reports 文件夹 */}
             <div
-                className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800`}
+                className={`flex items-center px-2 py-2 text-sm rounded-md cursor-pointer text-gray-500 hover:text-black dark:hover:text-white hover:bg-gray-200/50 dark:hover:bg-gray-800 transition-colors`}
                 onClick={() => {
                     // Find the SEO-Audits folder in fileSystem
                     const seoFolder = fileSystem.find(f => f.name === 'SEO-Audits' && f.type === 'folder');
@@ -479,7 +495,7 @@ const KnowledgeBase = () => {
                     }
                 }}
             >
-                <Folder size={16} className="mr-2 text-purple-500" />
+                <Folder size={16} className="mr-2 text-gray-400" />
                 SEO Audit Reports
             </div>
           </div>
@@ -556,7 +572,7 @@ const KnowledgeBase = () => {
       </div>
 
       {/* Main Content: Daily Flow or Editor */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-gray-50 dark:bg-gray-900">
+      <div className="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-black relative">
         {viewMode === 'daily' ? (
           <DailyFlow />
         ) : viewMode === 'topic' ? (
@@ -564,31 +580,31 @@ const KnowledgeBase = () => {
         ) : (
           <div className="flex-1 flex flex-col h-full overflow-hidden">
                 {/* Editor Header */}
-                <header className="h-12 border-b border-gray-200 dark:border-gray-800 flex items-center px-4 justify-between bg-white dark:bg-gray-900">
+                <header className="h-14 border-b border-gray-200 dark:border-gray-800 flex items-center px-6 justify-between bg-white/80 dark:bg-black/80 backdrop-blur-md sticky top-0 z-10">
                   <div className="flex items-center">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                      {selectedFile ? selectedFile.name : '未选择文件'}
+                    <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      {selectedFile ? selectedFile.name : 'No file selected'}
                     </span>
                   </div>
                   {selectedFile && (
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-3">
                       {autoSaving ? (
-                        <span className="text-xs text-gray-400 mr-2 flex items-center">
-                          <Loader size={12} className="animate-spin mr-1" /> 自动保存中...
+                        <span className="text-xs text-gray-500 flex items-center">
+                          <Loader size={12} className="animate-spin mr-1.5" /> Saving...
                         </span>
                       ) : (
-                        <span className="text-xs text-gray-400 mr-2">已保存</span>
+                        <span className="text-xs text-gray-400">Saved</span>
                       )}
                     </div>
                   )}
                 </header>
                 
                 {/* Editor Area */}
-                <div className="flex-1 p-0 overflow-y-auto bg-white dark:bg-gray-900 relative">
+                <div className="flex-1 p-0 overflow-y-auto bg-white dark:bg-black relative">
                     {selectedFile ? (
                       fileContentLoading ? (
                          <div className="flex items-center justify-center h-full text-gray-400">
-                            <Loader className="animate-spin mr-2" size={24} /> 加载中...
+                            <Loader className="animate-spin mr-2" size={20} /> Loading...
                          </div>
                       ) : (
                         <RichEditor 
@@ -599,9 +615,9 @@ const KnowledgeBase = () => {
                         />
                       )
                     ) : (
-                      <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                      <div className="h-full flex flex-col items-center justify-center text-gray-300 dark:text-gray-700">
                         <BookOpen size={48} className="mb-4 opacity-20" />
-                        <p>选择一个文件开始阅读或编辑</p>
+                        <p className="text-sm font-medium">Select a file to view or edit</p>
                       </div>
                     )}
                 </div>

@@ -87,14 +87,14 @@ const DailyFlow = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900">
+    <div className="flex flex-col h-full bg-white dark:bg-black">
       {/* Top Input Area */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 shadow-sm z-10">
+      <div className="bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 p-4 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto">
           <form onSubmit={handleQuickSubmit} className="relative">
             <textarea
-              className="w-full p-4 pr-12 text-base bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-gray-700 transition-all resize-none"
-              placeholder="此刻在想什么？直接输入，自动记录到今天..."
+              className="w-full p-4 pr-12 text-sm bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white transition-all resize-none placeholder:text-gray-400"
+              placeholder="What's on your mind? (Markdown supported)"
               rows={3}
               value={quickInput}
               onChange={(e) => setQuickInput(e.target.value)}
@@ -107,11 +107,11 @@ const DailyFlow = () => {
             <div className="absolute left-3 bottom-3 flex space-x-2">
                 <button 
                     type="button" 
-                    className="p-1 text-gray-400 hover:text-blue-500 transition-colors"
-                    title="上传图片/文件 (Coming Soon)"
+                    className="p-1 text-gray-400 hover:text-black dark:hover:text-white transition-colors"
+                    title="Upload (Coming Soon)"
                     onClick={() => fileInputRef.current?.click()}
                 >
-                    <Paperclip size={18} />
+                    <Paperclip size={16} />
                 </button>
                 <input 
                     type="file" 
@@ -123,27 +123,27 @@ const DailyFlow = () => {
             <button
               type="submit"
               disabled={submitting || !quickInput.trim()}
-              className="absolute right-3 bottom-3 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="absolute right-3 bottom-3 p-1.5 bg-black text-white dark:bg-white dark:text-black rounded-md hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-              {submitting ? <Loader size={18} className="animate-spin" /> : <Send size={18} />}
+              {submitting ? <Loader size={14} className="animate-spin" /> : <Send size={14} />}
             </button>
           </form>
-          <div className="text-xs text-gray-400 mt-2 flex justify-between px-1">
-            <span>支持 Markdown · Ctrl+Enter 发送</span>
-            <span className="flex items-center cursor-pointer hover:text-blue-500" onClick={loadNotes}>
-                <RefreshCw size={12} className="mr-1" /> 刷新列表
+          <div className="text-[10px] text-gray-400 mt-2 flex justify-between px-1 uppercase tracking-wider font-medium">
+            <span>Cmd+Enter to send</span>
+            <span className="flex items-center cursor-pointer hover:text-black dark:hover:text-white transition-colors" onClick={loadNotes}>
+                <RefreshCw size={10} className="mr-1" /> Refresh
             </span>
           </div>
         </div>
       </div>
 
       {/* Cards Stream */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-white dark:bg-black">
         <div className="max-w-3xl mx-auto">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-              <Loader className="animate-spin text-blue-500 mb-4" size={32} />
-              <p>正在加载最近的记忆...</p>
+              <Loader className="animate-spin mb-4" size={20} />
+              <p className="text-xs font-mono uppercase">Loading memories...</p>
             </div>
           ) : (
             <div className="space-y-6">
@@ -155,8 +155,8 @@ const DailyFlow = () => {
                 />
               ))}
               
-              <div className="text-center py-8 text-gray-400 text-sm">
-                - 仅展示最近 7 天内容 -
+              <div className="text-center py-8 text-gray-300 dark:text-gray-700 text-xs font-mono uppercase tracking-widest">
+                - Recent 7 Days -
               </div>
             </div>
           )}

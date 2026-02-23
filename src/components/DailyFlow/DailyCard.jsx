@@ -90,35 +90,35 @@ const DailyCard = ({ note, onUpdate, onSave }) => {
   }, [isDirty, isExpanded, saveNow]);
 
   return (
-    <div className={`mb-4 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 transition-all duration-200 ${isToday ? 'ring-1 ring-blue-500/30' : ''}`}>
+    <div className={`mb-4 bg-white dark:bg-black rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 transition-all duration-200 ${isToday ? 'ring-1 ring-black dark:ring-white' : ''}`}>
       {/* Card Header */}
       <div 
-        className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded-t-xl group"
+        className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/50 rounded-t-lg group"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center space-x-3">
-          <div className={`p-2 rounded-lg ${isToday ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
-            <Calendar size={20} />
+          <div className={`p-2 rounded-md border ${isToday ? 'bg-black text-white dark:bg-white dark:text-black border-transparent' : 'bg-white dark:bg-black text-gray-500 border-gray-200 dark:border-gray-800'}`}>
+            <Calendar size={16} />
           </div>
           <div>
             <div className="flex items-center">
-              <span className="text-lg font-bold text-gray-800 dark:text-gray-100 mr-2">{note.date}</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-gray-100 mr-2">{note.date}</span>
               <span className="text-xs text-gray-500 font-medium mr-2">
                 {dayOfWeek}
               </span>
-              {isToday && <span className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-bold">Today</span>}
+              {isToday && <span className="text-[10px] bg-black text-white dark:bg-white dark:text-black px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Today</span>}
             </div>
           </div>
         </div>
         
         <div className="flex items-center space-x-2" onClick={e => e.stopPropagation()}>
           {isExpanded && (
-            <span className="text-xs text-gray-400">
-              {isSaving ? '保存中...' : isDirty ? '未保存' : '已保存'}
+            <span className="text-[10px] text-gray-400 uppercase tracking-wider">
+              {isSaving ? 'Saving...' : isDirty ? 'Unsaved' : 'Saved'}
             </span>
           )}
-          <button className="text-gray-400 hover:text-gray-600" onClick={() => setIsExpanded(!isExpanded)}>
-            {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          <button className="text-gray-400 hover:text-black dark:hover:text-white transition-colors" onClick={() => setIsExpanded(!isExpanded)}>
+            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
         </div>
       </div>

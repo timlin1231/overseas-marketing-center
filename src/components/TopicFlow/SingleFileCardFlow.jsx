@@ -163,14 +163,14 @@ const SingleFileCardFlow = ({ title, path }) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-50 dark:bg-gray-900">
+    <div className="flex flex-col h-full bg-white dark:bg-black">
       {/* Top Input Area (Same as DailyFlow) */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 shadow-sm z-10">
+      <div className="bg-white/80 dark:bg-black/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 p-4 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto">
           <form onSubmit={handleQuickSubmit} className="relative">
             <textarea
-              className="w-full p-4 pr-12 text-base bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white dark:focus:bg-gray-700 transition-all resize-none"
-              placeholder={`记录到 ${title}... (自动归档到今日)`}
+              className="w-full p-4 pr-12 text-sm bg-white dark:bg-black border border-gray-200 dark:border-gray-800 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-black dark:focus:ring-white transition-all resize-none placeholder:text-gray-400"
+              placeholder={`Add to ${title}... (Auto-archived to today)`}
               rows={3}
               value={quickInput}
               onChange={(e) => setQuickInput(e.target.value)}
@@ -183,33 +183,33 @@ const SingleFileCardFlow = ({ title, path }) => {
             <button
               type="submit"
               disabled={submitting || !quickInput.trim()}
-              className="absolute right-3 bottom-3 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="absolute right-3 bottom-3 p-1.5 bg-black text-white dark:bg-white dark:text-black rounded-md hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-              {submitting ? <Loader size={18} className="animate-spin" /> : <Send size={18} />}
+              {submitting ? <Loader size={14} className="animate-spin" /> : <Send size={14} />}
             </button>
           </form>
-          <div className="text-xs text-gray-400 mt-2 flex justify-between px-1">
-            <span>支持 Markdown · Ctrl+Enter 发送</span>
-            <span className="flex items-center cursor-pointer hover:text-blue-500" onClick={load}>
-                <RefreshCw size={12} className="mr-1" /> 刷新列表
+          <div className="text-[10px] text-gray-400 mt-2 flex justify-between px-1 uppercase tracking-wider font-medium">
+            <span>Cmd+Enter to send</span>
+            <span className="flex items-center cursor-pointer hover:text-black dark:hover:text-white transition-colors" onClick={load}>
+                <RefreshCw size={10} className="mr-1" /> Refresh
             </span>
           </div>
         </div>
       </div>
 
       {/* Cards Stream */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-white dark:bg-black">
         <div className="max-w-3xl mx-auto">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-              <Loader className="animate-spin text-blue-500 mb-4" size={32} />
-              <p>正在解析 {title}...</p>
+              <Loader className="animate-spin mb-4" size={20} />
+              <p className="text-xs font-mono uppercase">Parsing {title}...</p>
             </div>
           ) : (
             <div className="space-y-6">
               {cards.length === 0 ? (
-                 <div className="text-center py-20 text-gray-400">
-                    <p>暂无内容，在上方输入第一条记录吧</p>
+                 <div className="text-center py-20 text-gray-400 text-xs">
+                    <p>No content yet. Type above to start.</p>
                  </div>
               ) : (
                   cards.map((card, idx) => (
@@ -217,22 +217,7 @@ const SingleFileCardFlow = ({ title, path }) => {
                       key={card.date || idx} 
                       note={{
                           ...card,
-                          path: path, // Note: DailyCard uses this path for putFile, but here we override save logic?
-                          // Actually DailyCard handles save internally using putFile(note.path).
-                          // This is a conflict! DailyCard writes to a FILE path assuming it owns the file.
-                          // But here multiple cards share ONE file.
-                          // WE MUST MODIFY DailyCard OR WRAP IT.
-                          // Since we want to reuse UI, we can pass a "virtual" path or intercept onUpdate?
-                          
-                          // WAIT: DailyCard calls `putFile(note.path, ...)` internally.
-                          // If we pass `path` (e.g. `todolist.md`), DailyCard will overwrite the WHOLE file with just that card's content!
-                          // This is DANGEROUS.
-                          
-                          // FIX: We need DailyCard to support "controlled mode" where it doesn't save itself, 
-                          // OR we accept that we can't reuse DailyCard's internal save logic easily without refactoring.
-                          
-                          // Strategy:
-                          // Modify DailyCard to accept `onSave` prop. If provided, it calls `onSave(content)` INSTEAD of `putFile`.
+                          path: path, 
                       }}
                       // We need to pass a custom prop to intercept save
                       onSave={async (newContent) => {
@@ -244,7 +229,7 @@ const SingleFileCardFlow = ({ title, path }) => {
               )}
               
               {cards.length > 0 && (
-                <div className="text-center py-8 text-gray-400 text-sm">
+                <div className="text-center py-8 text-gray-300 dark:text-gray-700 text-xs font-mono uppercase tracking-widest">
                    - End of {title} -
                 </div>
               )}
