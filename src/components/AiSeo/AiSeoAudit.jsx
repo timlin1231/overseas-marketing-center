@@ -160,7 +160,7 @@ const CitationPatternsSection = ({ data }) => {
 };
 
 const BotAccessSection = ({ data }) => {
-    const [expanded, setExpanded] = useState(false);
+    const [expanded, setExpanded] = useState(true);
     if (!data) return null;
 
     const blockedCount = data.bots.filter(b => b.status === 'blocked').length;
@@ -298,7 +298,7 @@ const AiSeoAudit = () => {
           <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
             <div className="flex items-center space-x-2">
                 <Bot className="text-black dark:text-white" size={20} />
-                <h1 className="text-base font-bold tracking-tight">AI SEO Audit</h1>
+                <h1 className="text-base font-bold tracking-tight">AI 搜索内容合规检测</h1>
             </div>
           </div>
         </header>
@@ -312,7 +312,7 @@ const AiSeoAudit = () => {
                     <div className="text-center mb-8">
                         <h2 className="text-3xl font-bold mb-2 tracking-tight">优化您的内容以适应 AI 搜索</h2>
                         <p className="text-gray-500 max-w-lg mx-auto text-sm">
-                            分析您的网站是否准备好被 ChatGPT, Perplexity 和 Google AI Overviews 引用。
+                            分析您的网站是否符合 AI 搜索内容标准，提升被 ChatGPT, Perplexity 等引用的概率。
                         </p>
                     </div>
                 )}
@@ -358,71 +358,53 @@ const AiSeoAudit = () => {
                 animate={{ opacity: 1 }}
                 className="space-y-6"
               >
-                {/* Overview Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <Card className="p-5 flex flex-col justify-between h-32 border-l-4 border-l-black dark:border-l-white">
-                        <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">AI 准备度总分</span>
-                        <div className="flex items-baseline">
-                            <span className="text-4xl font-bold">{result.score}</span>
-                            <span className="text-sm text-gray-400 ml-1">/100</span>
+                {/* Simplified Output: Passed & Failed Lists */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Passed Items */}
+                    <Card className="p-6 border-l-4 border-l-green-500">
+                        <div className="flex items-center mb-4">
+                            <CheckCircle className="text-green-500 mr-2" size={24} />
+                            <h3 className="text-lg font-bold">达标项 ({result.passedItems.length})</h3>
                         </div>
-                    </Card>
-                    <Card className="p-5 flex flex-col justify-between h-32">
-                         <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">结构化数据</span>
-                         <div className="flex items-baseline">
-                            <span className="text-4xl font-bold">{result.sections.citationPatterns.schema.foundTypes.length}</span>
-                            <span className="text-sm text-gray-400 ml-1">种类型</span>
-                        </div>
-                    </Card>
-                    <Card className="p-5 flex flex-col justify-between h-32">
-                         <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">权威信号</span>
-                         <div className="flex items-baseline">
-                            <span className="text-4xl font-bold">
-                                {result.sections.citationPatterns.authority.score >= 80 ? '强' : result.sections.citationPatterns.authority.score >= 50 ? '中' : '弱'}
-                            </span>
-                        </div>
-                    </Card>
-                    <Card className="p-5 flex flex-col justify-between h-32">
-                         <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">可读性比率</span>
-                         <div className="flex items-baseline">
-                            <span className="text-4xl font-bold">{result.sections.extractability.readability.ratio}%</span>
-                            <span className="text-sm text-gray-400 ml-1">短段落</span>
-                        </div>
-                    </Card>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <AiAnswersSection data={result.sections.aiAnswers} />
-                    <BotAccessSection data={result.sections.botAccess} />
-                </div>
-                
-                {/* LLM Analysis Section */}
-                {result.sections.llmAnalysis && (
-                    <Card className="p-6 bg-gradient-to-r from-gray-50 to-white dark:from-gray-900 dark:to-black">
-                        <SectionHeader icon={Bot} title="AI 深度洞察" />
-                        <div className="space-y-4">
-                            <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">
-                                {result.sections.llmAnalysis.summary}
-                            </p>
-                            
-                            {result.sections.llmAnalysis.suggestions.length > 0 && (
-                                <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
-                                    <h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">优化建议</h4>
-                                    <ul className="space-y-2">
-                                        {result.sections.llmAnalysis.suggestions.map((suggestion, idx) => (
-                                            <li key={idx} className="flex items-start text-sm text-blue-800 dark:text-blue-200">
-                                                <span className="mr-2 mt-1.5 w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0" />
-                                                {suggestion}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
+                        <ul className="space-y-3">
+                            {result.passedItems.length > 0 ? (
+                                result.passedItems.map((item, idx) => (
+                                    <li key={idx} className="flex items-start text-sm text-gray-700 dark:text-gray-300">
+                                        <span className="w-1.5 h-1.5 bg-green-500 rounded-full mt-1.5 mr-2 flex-shrink-0" />
+                                        {item}
+                                    </li>
+                                ))
+                            ) : (
+                                <li className="text-sm text-gray-400 italic">暂无达标项</li>
                             )}
-                        </div>
+                        </ul>
                     </Card>
-                )}
 
-                <CitationPatternsSection data={result.sections.citationPatterns} />
+                    {/* Failed Items */}
+                    <Card className="p-6 border-l-4 border-l-red-500">
+                        <div className="flex items-center mb-4">
+                            <AlertTriangle className="text-red-500 mr-2" size={24} />
+                            <h3 className="text-lg font-bold">未达标项 ({result.failedItems.length})</h3>
+                        </div>
+                        <ul className="space-y-4">
+                            {result.failedItems.length > 0 ? (
+                                result.failedItems.map((item, idx) => (
+                                    <li key={idx} className="text-sm">
+                                        <div className="flex items-start text-gray-900 dark:text-gray-100 font-medium mb-1">
+                                            <span className="w-1.5 h-1.5 bg-red-500 rounded-full mt-1.5 mr-2 flex-shrink-0" />
+                                            {item.issue}
+                                        </div>
+                                        <div className="ml-3.5 pl-2 border-l-2 border-gray-100 dark:border-gray-800 text-gray-500 text-xs py-1">
+                                            💡 提示：{item.tip}
+                                        </div>
+                                    </li>
+                                ))
+                            ) : (
+                                <li className="text-sm text-gray-400 italic">太棒了！所有检查项均已达标 🎉</li>
+                            )}
+                        </ul>
+                    </Card>
+                </div>
 
               </motion.div>
             )}

@@ -26,8 +26,8 @@ const Home = () => {
     },
     {
       id: 3,
-      title: 'AI 搜索优化 (AI SEO)',
-      description: '优化内容以适应 AI 搜索（ChatGPT, Perplexity），提升 AI 引用率。',
+      title: 'AI 搜索内容合规检测',
+      description: '检测内容是否符合 AI 搜索（ChatGPT, Perplexity）的引用标准与最佳实践。',
       icon: <Bot className="w-8 h-8 text-purple-500" />,
       active: true,
       link: '/ai-seo',
