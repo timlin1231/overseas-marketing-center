@@ -185,7 +185,9 @@ const analyzeCitationPatterns = (pageData, botAccess) => {
     // 4.3 Freshness
     // 尝试在 meta 中找 date
     const dateMatch = html.match(/datePublished|dateModified|publish_date|updated_time/i);
-    const hasDate = !!dateMatch || /\d{4}-\d{2}-\d{2}/.test(html);
+    // 增强的日期检测正则，支持 "Updated on Feb 15, 2026" 等格式
+    const textDateRegex = /(?:updated|published|posted|modified)\s*(?:on|at)?\s*:?\s*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+\d{4}/i;
+    const hasDate = !!dateMatch || /\d{4}-\d{2}-\d{2}/.test(html) || textDateRegex.test(html.replace(/<[^>]+>/g, ' '));
 
     // 4.4 Schema Markup
     const schemaAnalysis = analyzeSchema(html);
