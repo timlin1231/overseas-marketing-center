@@ -24,7 +24,6 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { performAiSeoAnalysis, getAiAuditHistory } from '../../services/AiSeoService';
-import { useTask } from '../../context/TaskContext';
 
 // --- Reusable Components (Vercel Style) ---
 
@@ -372,18 +371,25 @@ const BotAccessSection = ({ data }) => {
 // --- Main Page ---
 
 const AiSeoAudit = () => {
-  // Fix: Correctly destructure aiAuditState from Context
-  const { aiAuditState, updateAiAudit } = useTask();
-  
-  // Use default values to prevent crash if Context is not ready
-  const { result, loading, error } = aiAuditState || { 
-    result: null, 
-    loading: false, 
-    error: null 
-  };
-  
+  // --- Local State Management (Replaces Context for Stability) ---
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
   const [url, setUrl] = useState('');
   const [historyRecords, setHistoryRecords] = useState([]);
+
+  // --- Functions ---
+
+  const refreshAiHistory = async () => {
+    try {
+      const records = await getAiAuditHistory();
+      if (Array.isArray(records)) {
+        setHistoryRecords(records);
+      }
+    } catch (err) {
+      console.error('Failed to load AI audit history:', err);
+    }
+  };
 
   const handleAnalyze = async (e) => {
     e?.preventDefault();
@@ -394,34 +400,26 @@ const AiSeoAudit = () => {
       targetDomain = `https://${targetDomain}`;
     }
 
-    updateAiAudit({ loading: true, error: null, result: null });
+    setLoading(true);
+    setError(null);
+    setResult(null);
 
     try {
       const data = await performAiSeoAnalysis(targetDomain);
-      
-      // Update result state
-      updateAiAudit({ result: data });
-      
-      // Refresh local history in sidebar
+      setResult(data);
       await refreshAiHistory(); 
-      
-      // Optional: Trigger a refresh of the Knowledge Base file tree if possible, 
-      // but since KB is a separate component, user might need to refresh KB manually or we use a global event.
-      // For now, the file is saved to repo, so next time KB loads it will appear.
-      
     } catch (err) {
-      updateAiAudit({ error: err.message || 'Analysis failed.' });
+      setError(err.message || 'Analysis failed.');
     } finally {
-      updateAiAudit({ loading: false });
+      setLoading(false);
     }
   };
 
   const loadHistoryItem = (item) => {
-    updateAiAudit({ 
-        result: item, 
-        domain: item.domain,
-        error: null 
-    });
+    if (!item) return;
+    setResult(item);
+    setUrl(item.domain || '');
+    setError(null);
   };
 
   // Load history on mount
