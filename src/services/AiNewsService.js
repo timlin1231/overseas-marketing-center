@@ -3,13 +3,21 @@ import { getFileContent, putFile, getRepoContent, deleteFile } from '../GitHubSe
 
 const NEWS_HISTORY_DIR = 'AI-News-History';
 
+// Helper to get Beijing Date String (YYYY-MM-DD)
+const getBeijingDateStr = () => {
+    // Create a date object from current time
+    const d = new Date();
+    // Convert to Beijing time string
+    return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' });
+};
+
 /**
  * Fetch the latest AI news from the local JSON data
- * In a real scenario, this might fetch from an API or the python server
  */
 export const fetchLatestNews = async () => {
   try {
-    const response = await fetch('/data/latest-24h.json');
+    // Add timestamp to prevent caching
+    const response = await fetch(`/data/latest-24h.json?t=${Date.now()}`);
     if (!response.ok) {
       throw new Error('Failed to fetch news data');
     }
@@ -26,9 +34,8 @@ export const fetchLatestNews = async () => {
  */
 export const fetchWaytoagiNews = async () => {
   try {
-    const response = await fetch('/data/waytoagi-7d.json');
+    const response = await fetch(`/data/waytoagi-7d.json?t=${Date.now()}`);
     if (!response.ok) {
-      // It's possible this file doesn't exist yet if the crawler hasn't run it
       console.warn('WaytoAGI data not found, returning empty.');
       return { updates_7d: [], updates_today: [] };
     }
@@ -44,7 +51,7 @@ export const fetchWaytoagiNews = async () => {
  * Save a specific news item or a daily summary to the Knowledge Base
  */
 export const saveNewsToHistory = async (newsItem) => {
-  const dateStr = new Date().toISOString().split('T')[0];
+  const dateStr = getBeijingDateStr();
   // Sanitize title for filename
   const safeTitle = newsItem.title.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_').slice(0, 50);
   const filename = `${dateStr}_${safeTitle}.md`;
@@ -69,7 +76,7 @@ export const saveNewsToHistory = async (newsItem) => {
  * Save the entire daily report as a single Markdown file
  */
 export const saveDailyReport = async (newsData, waytoagiData) => {
-  const dateStr = new Date().toISOString().split('T')[0];
+  const dateStr = getBeijingDateStr();
   const filename = `${dateStr}_Daily_Brief.md`;
 
   let content = `# AI News Radar - Daily Brief (${dateStr})\n\n`;
@@ -78,7 +85,7 @@ export const saveDailyReport = async (newsData, waytoagiData) => {
   content += `## Overview\n`;
   content += `- **Total Items:** ${newsData.total_items || 0}\n`;
   content += `- **AI Items:** ${newsData.items_ai?.length || 0}\n`;
-  content += `- **Generated:** ${new Date().toLocaleString()}\n\n`;
+  content += `- **Generated:** ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n\n`;
 
   // WaytoAGI
   if (waytoagiData?.updates_today?.length > 0) {
@@ -97,7 +104,9 @@ export const saveDailyReport = async (newsData, waytoagiData) => {
       content += `### ${item.title_zh || item.title}\n`;
       content += `- **Source:** ${item.site_name} / ${item.source || 'General'}\n`;
       content += `- **Link:** ${item.url}\n`;
-      content += `- **Time:** ${new Date(item.published_at).toLocaleTimeString()}\n\n`;
+      // Use item time
+      const timeStr = item.published_at ? new Date(item.published_at).toLocaleTimeString('zh-CN', {timeZone: 'Asia/Shanghai'}) : 'Unknown';
+      content += `- **Time:** ${timeStr}\n\n`;
     });
   }
 
@@ -122,7 +131,7 @@ const generateNewsMarkdown = (item) => {
   return `# ${item.title}
 
 **Source:** [${item.site_name}](${item.url})
-**Date:** ${new Date(item.published_at).toLocaleString()}
+**Date:** ${new Date(item.published_at).toLocaleString('zh-CN', {timeZone: 'Asia/Shanghai'})}
 **Topic:** ${item.topic || 'AI/Tech'}
 
 ## Summary
@@ -190,6 +199,7 @@ export const getBriefContent = async (path) => {
     if (file && file.content) {
         // GitHub API returns base64
         try {
+            // Fix for unicode characters
             return decodeURIComponent(escape(atob(file.content.replace(/\n/g, ''))));
         } catch (e) {
             return atob(file.content); // Fallback for simple ascii

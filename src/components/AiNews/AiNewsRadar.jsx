@@ -45,29 +45,13 @@ const ViewBriefModal = ({ file, onClose }) => {
     const handleSaveEdit = async () => {
         setIsSaving(true);
         try {
-             // We need a method to update the file content.
-             // AiNewsService doesn't export updateNewsHistory, but saveNewsToHistory calls putFile.
-             // We can import putFile from AiNewsService? No, it's not exported.
-             // We should add updateNewsHistory to AiNewsService.
-             // For now, let's assume we can add it or use a workaround.
-             // Wait, I can't easily modify AiNewsService here without another tool call.
-             // But I can use saveNewsToHistory logic if I had access.
-             
-             // Let's modify AiNewsService to export a generic update function or use putFile via a new service method.
-             // Since I can't modify service in this turn (I want to do it all at once), I will use a placeholder alert 
-             // and then immediately go to modify the service in the next step.
-             
-             // Actually, I can use the existing saveNewsToHistory but that takes an item object.
-             // I need to save raw markdown.
-             
-             // Let's invoke a service method that I WILL create in the next step: updateBriefContent
              await updateBriefContent(file.path, editedContent);
              setContent(editedContent);
              setIsEditing(false);
              alert('Brief updated successfully!');
         } catch (e) {
             console.error(e);
-            alert('Failed to save changes.');
+            alert('Failed to save changes. Please try again.');
         } finally {
             setIsSaving(false);
         }
@@ -451,12 +435,14 @@ const AiNewsRadar = () => {
       setSavingId('report');
       try {
           await saveDailyReport(newsData, waytoagiData);
+          // Wait a bit for GitHub API consistency
+          await new Promise(r => setTimeout(r, 1000));
           const newHistory = await getNewsHistory();
           setHistoryItems(newHistory);
           alert('Daily Report Saved Successfully!');
       } catch (err) {
           console.error('Failed to save report:', err);
-          alert('Failed to save report.');
+          alert('Failed to save report. Please check the console for details.');
       } finally {
           setSavingId(null);
       }
@@ -468,6 +454,8 @@ const AiNewsRadar = () => {
       
       try {
           await deleteNewsHistory(file.path);
+          // Wait a bit for GitHub API consistency
+          await new Promise(r => setTimeout(r, 500));
           const newHistory = await getNewsHistory();
           setHistoryItems(newHistory);
       } catch (err) {
