@@ -1,9 +1,14 @@
+
 import { useEffect, useImperativeHandle, forwardRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableCell from '@tiptap/extension-table-cell';
+import TableHeader from '@tiptap/extension-table-header';
 import { common, createLowlight } from 'lowlight';
 import { Markdown } from 'tiptap-markdown';
 import { marked } from 'marked';
@@ -11,7 +16,7 @@ import classNames from 'classnames';
 import { 
   Bold, Italic, Strikethrough, Code, 
   Heading1, Heading2, List, ListOrdered, 
-  Quote
+  Quote, Table as TableIcon
 } from 'lucide-react';
 
 // Setup lowlight for syntax highlighting
@@ -80,6 +85,15 @@ const MenuBar = ({ editor }) => {
       action: () => editor.chain().focus().toggleBlockquote().run(),
       isActive: editor.isActive('blockquote'),
     },
+    {
+      type: 'divider',
+    },
+    {
+      icon: <TableIcon size={18} />,
+      title: 'Insert Table',
+      action: () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
+      isActive: editor.isActive('table'),
+    },
   ];
 
   return (
@@ -125,8 +139,19 @@ const RichEditor = forwardRef(({ content, onChange, onHeadingsUpdate, editable =
       CodeBlockLowlight.configure({
         lowlight,
       }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
       Markdown,
     ],
+    editorProps: {
+      attributes: {
+        class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-xl mx-auto focus:outline-none dark:prose-invert max-w-4xl py-8 px-4',
+      },
+    },
     content: marked(content || ''), // Initial content: Markdown -> HTML
     editable: editable,
     onUpdate: ({ editor }) => {
@@ -195,7 +220,7 @@ const RichEditor = forwardRef(({ content, onChange, onHeadingsUpdate, editable =
   return (
     <div className="flex flex-col h-full bg-white dark:bg-gray-900">
       {editable && <MenuBar editor={editor} />}
-      <EditorContent editor={editor} className="flex-1 overflow-y-auto tiptap p-4 focus:outline-none" />
+      <EditorContent editor={editor} className="flex-1 overflow-y-auto tiptap focus:outline-none" />
     </div>
   );
 });

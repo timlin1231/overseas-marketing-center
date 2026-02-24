@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,14 +8,14 @@
   line-height: 1.5;
   font-weight: 400;
   color-scheme: light dark;
-  background-color: #ffffff; /* Vercel uses pure white or very light gray */
+  background-color: #ffffff;
   color: #000000;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 .dark :root {
-  background-color: #000000; /* Vercel uses pure black */
+  background-color: #000000;
   color: #ffffff;
 }
 
@@ -43,50 +44,76 @@ body {
   @apply bg-gray-400 dark:bg-gray-600;
 }
 
+/* Editor Typography */
 .tiptap {
-  @apply text-base leading-relaxed text-gray-800 dark:text-gray-100;
+  @apply outline-none max-w-none;
 }
 
-.tiptap h1 {
-  @apply text-3xl font-bold mt-2 mb-4;
+/* Table specific styles for Tiptap */
+.tiptap table {
+  @apply w-full border-collapse my-4 table-auto;
 }
 
-.tiptap h2 {
-  @apply text-2xl font-bold mt-2 mb-3;
+.tiptap th {
+  @apply bg-gray-50 dark:bg-gray-800 font-bold text-left border border-gray-200 dark:border-gray-700 px-3 py-2;
 }
 
-.tiptap h3 {
-  @apply text-xl font-bold mt-2 mb-2;
+.tiptap td {
+  @apply border border-gray-200 dark:border-gray-700 px-3 py-2;
 }
 
-.tiptap p {
-  @apply my-2;
+/* Selected cell state */
+.tiptap .selectedCell:after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; top: 0; bottom: 0;
+  background: rgba(200, 200, 255, 0.4);
+  pointer-events: none;
+  z-index: 2;
 }
 
-.tiptap ul {
-  @apply list-disc list-outside ml-6 my-2;
+.tiptap .column-resize-handle {
+  background-color: #adf;
+  bottom: -2px;
+  position: absolute;
+  right: -2px;
+  pointer-events: none;
+  top: 0;
+  width: 4px;
 }
 
-.tiptap ol {
-  @apply list-decimal list-outside ml-6 my-2;
+/* Image styling */
+.tiptap img {
+  @apply rounded-lg shadow-sm border border-gray-100 dark:border-gray-800 my-6 max-h-[500px] object-contain mx-auto;
 }
 
+/* Blockquote styling */
 .tiptap blockquote {
-  @apply border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic my-2 text-gray-600 dark:text-gray-300;
+  @apply border-l-4 border-gray-200 dark:border-gray-700 pl-4 italic text-gray-600 dark:text-gray-400 my-4;
+}
+
+/* Code block styling */
+.tiptap pre {
+  @apply bg-gray-100 dark:bg-gray-900 rounded-lg p-4 overflow-x-auto my-4 text-sm font-mono border border-gray-200 dark:border-gray-800;
 }
 
 .tiptap code {
-  @apply px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100;
-}
-
-.tiptap pre {
-  @apply p-3 rounded bg-gray-100 dark:bg-gray-800 overflow-x-auto;
+  @apply bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-sm font-mono text-pink-500 dark:text-pink-400 font-normal;
 }
 
 .tiptap pre code {
-  @apply bg-transparent p-0;
+  @apply bg-transparent text-inherit p-0;
 }
 
-.tiptap a {
-  @apply text-blue-600 dark:text-blue-400 underline underline-offset-2;
+/* List styling */
+.tiptap ul {
+  @apply list-disc list-outside ml-5 space-y-1;
+}
+
+.tiptap ol {
+  @apply list-decimal list-outside ml-5 space-y-1;
+}
+
+.tiptap li p {
+  @apply my-0;
 }
