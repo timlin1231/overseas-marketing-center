@@ -22,6 +22,25 @@ export const fetchLatestNews = async () => {
 };
 
 /**
+ * Fetch WaytoAGI news updates (7 days)
+ */
+export const fetchWaytoagiNews = async () => {
+  try {
+    const response = await fetch('/data/waytoagi-7d.json');
+    if (!response.ok) {
+      // It's possible this file doesn't exist yet if the crawler hasn't run it
+      console.warn('WaytoAGI data not found, returning empty.');
+      return { updates_7d: [], updates_today: [] };
+    }
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching WaytoAGI news:', error);
+    return { updates_7d: [], updates_today: [] };
+  }
+};
+
+/**
  * Save a specific news item or a daily summary to the Knowledge Base
  */
 export const saveNewsToHistory = async (newsItem) => {
@@ -38,6 +57,56 @@ export const saveNewsToHistory = async (newsItem) => {
     `Save AI News: ${newsItem.title}`
   );
   
+  return {
+    name: filename,
+    path: `${NEWS_HISTORY_DIR}/${filename}`,
+    type: 'file',
+    timestamp: new Date().toISOString()
+  };
+};
+
+/**
+ * Save the entire daily report as a single Markdown file
+ */
+export const saveDailyReport = async (newsData, waytoagiData) => {
+  const dateStr = new Date().toISOString().split('T')[0];
+  const filename = `${dateStr}_Daily_Brief.md`;
+
+  let content = `# AI News Radar - Daily Brief (${dateStr})\n\n`;
+  
+  // Stats
+  content += `## Overview\n`;
+  content += `- **Total Items:** ${newsData.total_items || 0}\n`;
+  content += `- **AI Items:** ${newsData.items_ai?.length || 0}\n`;
+  content += `- **Generated:** ${new Date().toLocaleString()}\n\n`;
+
+  // WaytoAGI
+  if (waytoagiData?.updates_today?.length > 0) {
+    content += `## WaytoAGI Updates\n`;
+    waytoagiData.updates_today.forEach(u => {
+      content += `- [${u.title}](${u.url}) (${u.date})\n`;
+    });
+    content += `\n`;
+  }
+
+  // News Items (AI Focus)
+  const aiItems = newsData.items_ai || newsData.items || [];
+  if (aiItems.length > 0) {
+    content += `## Top AI News\n`;
+    aiItems.forEach(item => {
+      content += `### ${item.title_zh || item.title}\n`;
+      content += `- **Source:** ${item.site_name} / ${item.source || 'General'}\n`;
+      content += `- **Link:** ${item.url}\n`;
+      content += `- **Time:** ${new Date(item.published_at).toLocaleTimeString()}\n\n`;
+    });
+  }
+
+  await putFile(
+    `${NEWS_HISTORY_DIR}/${filename}`, 
+    content, 
+    `Save Daily Brief: ${dateStr}`
+  );
+
   return {
     name: filename,
     path: `${NEWS_HISTORY_DIR}/${filename}`,
