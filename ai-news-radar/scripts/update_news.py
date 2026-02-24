@@ -2289,6 +2289,54 @@ def main() -> int:
     print(f"Wrote: {waytoagi_path} ({waytoagi_payload.get('count_7d', 0)} items)")
     print(f"Wrote: {title_cache_path} ({len(title_cache)} entries)")
 
+    # --- Auto-save Daily Brief to History ---
+    try:
+        # Create history directory if not exists
+        history_dir = output_dir.parent.parent / "AI-News-History"
+        history_dir.mkdir(parents=True, exist_ok=True)
+        
+        date_str = now.astimezone(SH_TZ).strftime("%Y-%m-%d")
+        filename = f"{date_str}_Daily_Brief.md"
+        file_path = history_dir / filename
+        
+        # Generate Markdown content
+        content = f"# AI News Radar - Daily Brief ({date_str})\n\n"
+        
+        # Stats
+        content += f"## Overview\n"
+        content += f"- **Total Items:** {len(latest_items_ai_dedup)}\n"
+        content += f"- **Generated:** {now.astimezone(SH_TZ).strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+
+        # WaytoAGI
+        updates_today = waytoagi_payload.get("updates_today", [])
+        if updates_today:
+            content += f"## WaytoAGI Updates\n"
+            for u in updates_today:
+                content += f"- [{u.get('title')}]({u.get('url')}) ({u.get('date')})\n"
+            content += "\n"
+
+        # Top AI News
+        if latest_items_ai_dedup:
+            content += f"## Top AI News\n"
+            for item in latest_items_ai_dedup:
+                title = item.get("title_zh") or item.get("title")
+                source = item.get("site_name") or item.get("source")
+                url = item.get("url")
+                pub_time = item.get("published_at")
+                
+                content += f"### {title}\n"
+                content += f"- **Source:** {source}\n"
+                content += f"- **Link:** {url}\n"
+                if pub_time:
+                    content += f"- **Time:** {pub_time}\n"
+                content += "\n"
+        
+        file_path.write_text(content, encoding="utf-8")
+        print(f"Auto-saved Daily Brief: {file_path}")
+        
+    except Exception as e:
+        print(f"Failed to auto-save daily brief: {e}")
+
     return 0
 
 

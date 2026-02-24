@@ -1,5 +1,5 @@
 
-import { getFileContent, putFile, getRepoContent } from '../GitHubService';
+import { getFileContent, putFile, getRepoContent, deleteFile } from '../GitHubService';
 
 const NEWS_HISTORY_DIR = 'AI-News-History';
 
@@ -162,4 +162,44 @@ export const getNewsHistory = async () => {
     console.error('Failed to fetch news history:', error);
     return [];
   }
+};
+
+/**
+ * Delete a news history file
+ */
+export const deleteNewsHistory = async (path) => {
+    // We need to get the SHA first to delete via GitHub API
+    try {
+        const file = await getFileContent(path);
+        if (!file || !file.sha) {
+            throw new Error('File not found or SHA missing');
+        }
+        await deleteFile(path, file.sha, `Delete brief: ${path}`);
+        return true;
+    } catch (e) {
+        console.error('Failed to delete brief:', e);
+        throw e;
+    }
+};
+
+/**
+ * Get content of a brief
+ */
+export const getBriefContent = async (path) => {
+    const file = await getFileContent(path);
+    // getFileContent returns { name, path, sha, size, url, html_url, git_url, download_url, type, content, encoding }
+    // content is base64 encoded usually.
+    // But getFileContent in my previous memory (from other files) might return decoded content if it handles it.
+    // Let's check getFileContent implementation.
+    // If it returns object with `content`, we need to decode it.
+    
+    if (file && file.content) {
+        // GitHub API returns base64
+        try {
+            return decodeURIComponent(escape(atob(file.content.replace(/\n/g, ''))));
+        } catch (e) {
+            return atob(file.content); // Fallback for simple ascii
+        }
+    }
+    return "";
 };

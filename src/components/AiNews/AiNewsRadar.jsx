@@ -8,9 +8,52 @@ import {
   Search,
   ExternalLink,
   Calendar,
-  Clock
+  Clock,
+  Trash2,
+  Eye,
+  Plus,
+  MoreVertical,
+  FolderOpen,
+  X,
+  Edit2
 } from 'lucide-react';
-import { fetchLatestNews, fetchWaytoagiNews, saveNewsToHistory, saveDailyReport, getNewsHistory } from '../../services/AiNewsService';
+import { fetchLatestNews, fetchWaytoagiNews, saveNewsToHistory, saveDailyReport, getNewsHistory, deleteNewsHistory, getBriefContent } from '../../services/AiNewsService';
+
+// --- Utility Components ---
+
+const ViewBriefModal = ({ file, onClose }) => {
+    const [content, setContent] = useState('Loading...');
+
+    useEffect(() => {
+        const load = async () => {
+            try {
+                const text = await getBriefContent(file.path);
+                setContent(text || 'No content.');
+            } catch (e) {
+                console.error(e);
+                setContent('Error loading content. Please check your network.');
+            }
+        };
+        if (file?.path) load();
+    }, [file]);
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
+            <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                    <h3 className="font-bold text-lg text-gray-900">{file.name}</h3>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                        <X className="w-5 h-5 text-gray-500" />
+                    </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+                    <pre className="whitespace-pre-wrap font-mono text-sm text-gray-700 bg-white p-4 rounded-lg border border-gray-200">{content}</pre>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 // --- Utility Functions ---
 
@@ -167,13 +210,30 @@ const AiNewsRadar = () => {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
   const [savedIds, setSavedIds] = useState([]); // Track saved IDs for UI feedback
+  const [viewFile, setViewFile] = useState(null); // File to view in modal
   
+  // Category Management States
+  const [categories, setCategories] = useState(() => {
+      const saved = localStorage.getItem('ai_news_categories');
+      return saved ? JSON.parse(saved) : [
+          { id: 'ai_news', name: 'AI News Information', type: 'default' },
+          { id: 'industry_monitor', name: 'Industry Monitoring', type: 'custom' }
+      ];
+  });
+  const [activeCategory, setActiveCategory] = useState('ai_news');
+  const [isEditingCats, setIsEditingCats] = useState(false);
+
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [siteFilter, setSiteFilter] = useState('');
   const [mode, setMode] = useState('ai'); // 'ai' | 'all'
   const [dedupe, setDedup] = useState(true);
   const [waytoagiMode, setWaytoagiMode] = useState('today'); // 'today' | '7d'
+
+  // Persist Categories
+  useEffect(() => {
+      localStorage.setItem('ai_news_categories', JSON.stringify(categories));
+  }, [categories]);
 
   // Initial Load
   useEffect(() => {
@@ -209,15 +269,20 @@ const AiNewsRadar = () => {
     if (!newsData) return;
 
     let items = [];
-    if (mode === 'ai') {
-        items = newsData.items_ai || [];
+    if (activeCategory === 'ai_news') {
+        if (mode === 'ai') {
+            items = newsData.items_ai || [];
+        } else {
+            items = dedupe 
+                ? (newsData.items_all || [])
+                : (newsData.items_all_raw || []);
+        }
     } else {
-        items = dedupe 
-            ? (newsData.items_all || [])
-            : (newsData.items_all_raw || []);
+        // Placeholder for other categories
+        items = []; 
     }
     setNewsItems(items);
-  }, [mode, dedupe, newsData]);
+  }, [mode, dedupe, newsData, activeCategory]);
 
   // Derived Statistics
   const stats = newsData ? {
@@ -332,8 +397,38 @@ const AiNewsRadar = () => {
       }
   };
 
+  const handleDeleteBrief = async (e, file) => {
+      e.stopPropagation();
+      if (!confirm(`Are you sure you want to delete "${file.name}"?`)) return;
+      
+      try {
+          await deleteNewsHistory(file.path);
+          const newHistory = await getNewsHistory();
+          setHistoryItems(newHistory);
+      } catch (err) {
+          console.error(err);
+          alert('Failed to delete brief.');
+      }
+  };
+
+  const handleAddCategory = () => {
+      const name = prompt("Enter category name:");
+      if (!name) return;
+      const id = 'cat_' + Date.now();
+      setCategories([...categories, { id, name, type: 'custom' }]);
+      setActiveCategory(id);
+  };
+
+  const handleDeleteCategory = (e, id) => {
+      e.stopPropagation();
+      if (!confirm('Delete this category?')) return;
+      setCategories(categories.filter(c => c.id !== id));
+      if (activeCategory === id) setActiveCategory('ai_news');
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#fcfcfc] text-gray-900 font-sans">
+      {viewFile && <ViewBriefModal file={viewFile} onClose={() => setViewFile(null)} />}
       
       {/* Header */}
       <header className="px-8 py-5 border-b border-gray-100 bg-white/80 backdrop-blur-md sticky top-0 z-20 flex justify-between items-center">
@@ -377,6 +472,43 @@ const AiNewsRadar = () => {
         
         {/* Sidebar: Saved Briefs */}
         <aside className="w-72 border-r border-gray-100 bg-gray-50/50 flex flex-col overflow-hidden">
+            
+            {/* Category Switcher (Requested Feature) */}
+            <div className="p-4 border-b border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                        <FolderOpen className="w-3 h-3" />
+                        Monitoring
+                    </h3>
+                    <button onClick={handleAddCategory} className="p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-black transition-colors" title="Add Category">
+                        <Plus className="w-3 h-3" />
+                    </button>
+                </div>
+                <div className="space-y-1">
+                    {categories.map(cat => (
+                        <div 
+                            key={cat.id}
+                            onClick={() => setActiveCategory(cat.id)}
+                            className={`group flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium cursor-pointer transition-all ${
+                                activeCategory === cat.id 
+                                    ? 'bg-white text-black shadow-sm ring-1 ring-gray-200' 
+                                    : 'text-gray-500 hover:text-black hover:bg-gray-100'
+                            }`}
+                        >
+                            <span className="truncate">{cat.name}</span>
+                            {cat.type === 'custom' && (
+                                <button 
+                                    onClick={(e) => handleDeleteCategory(e, cat.id)}
+                                    className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-opacity"
+                                >
+                                    <Trash2 className="w-3 h-3" />
+                                </button>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
+
             <div className="p-4 border-b border-gray-100 bg-gray-50">
                 <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
                     <Bookmark className="w-3 h-3" />
@@ -392,14 +524,22 @@ const AiNewsRadar = () => {
                     historyItems.map((file, idx) => (
                         <div 
                             key={idx}
-                            className="group p-3 rounded-lg bg-white border border-gray-100 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer"
+                            onClick={() => setViewFile(file)}
+                            className="group relative p-3 rounded-lg bg-white border border-gray-100 hover:border-gray-300 hover:shadow-sm transition-all cursor-pointer"
                         >
                             <div className="flex items-center justify-between mb-1">
                                 <span className="text-[10px] font-bold text-gray-400 uppercase">
                                     {file.name.split('_')[0]}
                                 </span>
+                                <button 
+                                    onClick={(e) => handleDeleteBrief(e, file)}
+                                    className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                                    title="Delete Brief"
+                                >
+                                    <Trash2 className="w-3 h-3" />
+                                </button>
                             </div>
-                            <h4 className="text-sm font-medium text-gray-700 group-hover:text-black leading-snug line-clamp-2">
+                            <h4 className="text-sm font-medium text-gray-700 group-hover:text-black leading-snug line-clamp-2 pr-4">
                                 {file.name.replace(/^\d{4}-\d{2}-\d{2}_/, '').replace(/_/g, ' ').replace('.md', '')}
                             </h4>
                         </div>
@@ -410,171 +550,182 @@ const AiNewsRadar = () => {
 
         {/* Main Feed */}
         <main className="flex-1 overflow-y-auto bg-white scroll-smooth">
-            <div className="max-w-4xl mx-auto px-8 py-8 space-y-8">
-                
-                {/* 1. Statistics Dashboard */}
-                {stats && (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                        {[
-                            ['24h AI', stats.aiCount],
-                            ['24h All', stats.allCount],
-                            ['Deduped', stats.allDedupCount],
-                            ['Sites', stats.siteCount],
-                            ['Sources', stats.sourceCount],
-                            ['Archive', stats.archiveTotal],
-                        ].map(([label, val]) => (
-                            <div key={label} className="p-4 rounded-2xl bg-gray-50 border border-gray-100">
-                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{label}</div>
-                                <div className="text-2xl font-bold text-gray-900">{fmtNumber(val)}</div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                {/* 2. Controls & Filters */}
-                <div className="bg-white sticky top-0 z-10 py-4 -mx-2 px-2 border-b border-transparent">
-                    <div className="flex flex-col gap-4">
-                        <div className="flex gap-4">
-                            <div className="relative flex-1">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                <input 
-                                    type="text" 
-                                    placeholder="Search topics, sources..." 
-                                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black transition-all"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                />
-                            </div>
-                            
-                            <select 
-                                value={siteFilter}
-                                onChange={(e) => setSiteFilter(e.target.value)}
-                                className="pl-4 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-black cursor-pointer appearance-none min-w-[160px]"
-                            >
-                                <option value="">All Sites</option>
-                                {siteStats.map(s => (
-                                    <option key={s.id} value={s.id}>{s.name} ({s.count})</option>
-                                ))}
-                            </select>
+            {activeCategory === 'ai_news' ? (
+                <div className="max-w-4xl mx-auto px-8 py-8 space-y-8">
+                    {/* ... (Existing AI News Content) ... */}
+                    {/* 1. Statistics Dashboard */}
+                    {stats && (
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                            {[
+                                ['24h AI', stats.aiCount],
+                                ['24h All', stats.allCount],
+                                ['Deduped', stats.allDedupCount],
+                                ['Sites', stats.siteCount],
+                                ['Sources', stats.sourceCount],
+                                ['Archive', stats.archiveTotal],
+                            ].map(([label, val]) => (
+                                <div key={label} className="p-4 rounded-2xl bg-gray-50 border border-gray-100">
+                                    <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{label}</div>
+                                    <div className="text-2xl font-bold text-gray-900">{fmtNumber(val)}</div>
+                                </div>
+                            ))}
                         </div>
+                    )}
 
-                        <div className="flex items-center justify-between">
-                            <div className="flex bg-gray-100 p-1 rounded-lg">
-                                <button 
-                                    onClick={() => setMode('ai')}
-                                    className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === 'ai' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
-                                >
-                                    AI Focused
-                                </button>
-                                <button 
-                                    onClick={() => setMode('all')}
-                                    className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === 'all' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
-                                >
-                                    All News
-                                </button>
-                            </div>
-                            
-                            {mode === 'all' && (
-                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                    {/* 2. Controls & Filters */}
+                    <div className="bg-white sticky top-0 z-10 py-4 -mx-2 px-2 border-b border-transparent">
+                        <div className="flex flex-col gap-4">
+                            <div className="flex gap-4">
+                                <div className="relative flex-1">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <input 
-                                        type="checkbox" 
-                                        checked={dedupe}
-                                        onChange={(e) => setDedup(e.target.checked)}
-                                        className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black" 
+                                        type="text" 
+                                        placeholder="Search topics, sources..." 
+                                        className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-black transition-all"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
                                     />
-                                    <span className="text-sm font-medium text-gray-600">Deduplicate</span>
-                                </label>
-                            )}
+                                </div>
+                                
+                                <select 
+                                    value={siteFilter}
+                                    onChange={(e) => setSiteFilter(e.target.value)}
+                                    className="pl-4 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:border-black cursor-pointer appearance-none min-w-[160px]"
+                                >
+                                    <option value="">All Sites</option>
+                                    {siteStats.map(s => (
+                                        <option key={s.id} value={s.id}>{s.name} ({s.count})</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                                <div className="flex bg-gray-100 p-1 rounded-lg">
+                                    <button 
+                                        onClick={() => setMode('ai')}
+                                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === 'ai' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                                    >
+                                        AI Focused
+                                    </button>
+                                    <button 
+                                        onClick={() => setMode('all')}
+                                        className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === 'all' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                                    >
+                                        All News
+                                    </button>
+                                </div>
+                                
+                                {mode === 'all' && (
+                                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={dedupe}
+                                            onChange={(e) => setDedup(e.target.checked)}
+                                            className="w-4 h-4 rounded border-gray-300 text-black focus:ring-black" 
+                                        />
+                                        <span className="text-sm font-medium text-gray-600">Deduplicate</span>
+                                    </label>
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                {/* 3. WaytoAGI Section (Replicating Original Module) */}
-                {waytoagiData && (
-                    <section className="bg-gray-900 text-white rounded-2xl p-6 shadow-xl relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500 rounded-full blur-[100px] opacity-20 pointer-events-none"></div>
-                        
-                        <div className="flex justify-between items-start mb-6 relative z-10">
-                            <div>
-                                <h2 className="text-lg font-bold flex items-center gap-2">
-                                    WaytoAGI Updates
-                                    <span className="px-2 py-0.5 bg-white/10 text-xs font-normal rounded-full">{waytoagiView.label}</span>
-                                </h2>
-                                <div className="text-xs text-gray-400 mt-1 flex gap-2">
-                                    <a href={waytoagiData.root_url} target="_blank" className="hover:text-white underline">Home</a>
-                                    <span>•</span>
-                                    <a href={waytoagiData.history_url} target="_blank" className="hover:text-white underline">History</a>
+                    {/* 3. WaytoAGI Section */}
+                    {waytoagiData && (
+                        <section className="bg-gray-900 text-white rounded-2xl p-6 shadow-xl relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500 rounded-full blur-[100px] opacity-20 pointer-events-none"></div>
+                            
+                            <div className="flex justify-between items-start mb-6 relative z-10">
+                                <div>
+                                    <h2 className="text-lg font-bold flex items-center gap-2">
+                                        WaytoAGI Updates
+                                        <span className="px-2 py-0.5 bg-white/10 text-xs font-normal rounded-full">{waytoagiView.label}</span>
+                                    </h2>
+                                    <div className="text-xs text-gray-400 mt-1 flex gap-2">
+                                        <a href={waytoagiData.root_url} target="_blank" className="hover:text-white underline">Home</a>
+                                        <span>•</span>
+                                        <a href={waytoagiData.history_url} target="_blank" className="hover:text-white underline">History</a>
+                                    </div>
+                                </div>
+                                <div className="flex bg-white/10 p-1 rounded-lg">
+                                    <button 
+                                        onClick={() => setWaytoagiMode('today')}
+                                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${waytoagiMode === 'today' ? 'bg-white text-black' : 'text-gray-300 hover:text-white'}`}
+                                    >
+                                        Today
+                                    </button>
+                                    <button 
+                                        onClick={() => setWaytoagiMode('7d')}
+                                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${waytoagiMode === '7d' ? 'bg-white text-black' : 'text-gray-300 hover:text-white'}`}
+                                    >
+                                        7 Days
+                                    </button>
                                 </div>
                             </div>
-                            <div className="flex bg-white/10 p-1 rounded-lg">
+
+                            <div className="space-y-3 relative z-10 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                                {waytoagiView.updates.length === 0 ? (
+                                    <div className="text-gray-500 text-sm py-4 text-center">No updates found for this period.</div>
+                                ) : (
+                                    waytoagiView.updates.map((u, i) => (
+                                        <a 
+                                            key={i} 
+                                            href={u.url} 
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center gap-4 group hover:bg-white/5 p-2 rounded-lg transition-colors"
+                                        >
+                                            <span className="text-xs font-mono text-gray-500 min-w-[60px]">{fmtDate(u.date)}</span>
+                                            <span className="text-sm text-gray-200 group-hover:text-white group-hover:underline underline-offset-4 decoration-purple-400">{u.title}</span>
+                                        </a>
+                                    ))
+                                )}
+                            </div>
+                        </section>
+                    )}
+
+                    {/* 4. Main News List */}
+                    <div className="min-h-[200px]">
+                        {loading ? (
+                            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                                <div className="w-8 h-8 border-2 border-gray-300 border-t-black rounded-full animate-spin mb-4"></div>
+                                <p className="text-sm">Loading intelligence...</p>
+                            </div>
+                        ) : groupedNews.length === 0 ? (
+                            <div className="text-center py-20 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                                <p className="text-gray-500">No news found matching your filters.</p>
                                 <button 
-                                    onClick={() => setWaytoagiMode('today')}
-                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${waytoagiMode === 'today' ? 'bg-white text-black' : 'text-gray-300 hover:text-white'}`}
+                                    onClick={() => {setSearchQuery(''); setSiteFilter(''); setMode('ai');}}
+                                    className="mt-4 text-sm font-medium text-blue-600 hover:underline"
                                 >
-                                    Today
-                                </button>
-                                <button 
-                                    onClick={() => setWaytoagiMode('7d')}
-                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${waytoagiMode === '7d' ? 'bg-white text-black' : 'text-gray-300 hover:text-white'}`}
-                                >
-                                    7 Days
+                                    Clear filters
                                 </button>
                             </div>
-                        </div>
-
-                        <div className="space-y-3 relative z-10 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                            {waytoagiView.updates.length === 0 ? (
-                                <div className="text-gray-500 text-sm py-4 text-center">No updates found for this period.</div>
-                            ) : (
-                                waytoagiView.updates.map((u, i) => (
-                                    <a 
-                                        key={i} 
-                                        href={u.url} 
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-4 group hover:bg-white/5 p-2 rounded-lg transition-colors"
-                                    >
-                                        <span className="text-xs font-mono text-gray-500 min-w-[60px]">{fmtDate(u.date)}</span>
-                                        <span className="text-sm text-gray-200 group-hover:text-white group-hover:underline underline-offset-4 decoration-purple-400">{u.title}</span>
-                                    </a>
-                                ))
-                            )}
-                        </div>
-                    </section>
-                )}
-
-                {/* 4. Main News List */}
-                <div className="min-h-[200px]">
-                    {loading ? (
-                        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                            <div className="w-8 h-8 border-2 border-gray-300 border-t-black rounded-full animate-spin mb-4"></div>
-                            <p className="text-sm">Loading intelligence...</p>
-                        </div>
-                    ) : groupedNews.length === 0 ? (
-                        <div className="text-center py-20 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                            <p className="text-gray-500">No news found matching your filters.</p>
-                            <button 
-                                onClick={() => {setSearchQuery(''); setSiteFilter(''); setMode('ai');}}
-                                className="mt-4 text-sm font-medium text-blue-600 hover:underline"
-                            >
-                                Clear filters
-                            </button>
-                        </div>
-                    ) : (
-                        groupedNews.map(([siteId, siteData]) => (
-                            <SiteGroup 
-                                key={siteId}
-                                siteName={siteData.siteName}
-                                items={siteData.items}
-                                onSave={handleSave}
-                                savingId={savingId}
-                                savedIds={savedIds}
-                            />
-                        ))
-                    )}
+                        ) : (
+                            groupedNews.map(([siteId, siteData]) => (
+                                <SiteGroup 
+                                    key={siteId}
+                                    siteName={siteData.siteName}
+                                    items={siteData.items}
+                                    onSave={handleSave}
+                                    savingId={savingId}
+                                    savedIds={savedIds}
+                                />
+                            ))
+                        )}
+                    </div>
                 </div>
-
-            </div>
+            ) : (
+                <div className="flex flex-col items-center justify-center h-full text-gray-400 p-8 text-center">
+                    <FolderOpen className="w-12 h-12 mb-4 text-gray-200" />
+                    <h2 className="text-lg font-bold text-gray-900 mb-2">
+                        {categories.find(c => c.id === activeCategory)?.name}
+                    </h2>
+                    <p className="max-w-md">
+                        This monitoring category is currently empty. Configure sources or scripts to populate this feed.
+                    </p>
+                </div>
+            )}
         </main>
       </div>
     </div>
