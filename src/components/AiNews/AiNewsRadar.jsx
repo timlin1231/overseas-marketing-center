@@ -17,18 +17,23 @@ import {
   X,
   Edit2
 } from 'lucide-react';
-import { fetchLatestNews, fetchWaytoagiNews, saveNewsToHistory, saveDailyReport, getNewsHistory, deleteNewsHistory, getBriefContent } from '../../services/AiNewsService';
+import { fetchLatestNews, fetchWaytoagiNews, saveNewsToHistory, saveDailyReport, getNewsHistory, deleteNewsHistory, getBriefContent, updateBriefContent } from '../../services/AiNewsService';
 
 // --- Utility Components ---
 
 const ViewBriefModal = ({ file, onClose }) => {
     const [content, setContent] = useState('Loading...');
+    const [isEditing, setIsEditing] = useState(false);
+    const [editedContent, setEditedContent] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         const load = async () => {
             try {
                 const text = await getBriefContent(file.path);
-                setContent(text || 'No content.');
+                const initialContent = text || 'No content.';
+                setContent(initialContent);
+                setEditedContent(initialContent);
             } catch (e) {
                 console.error(e);
                 setContent('Error loading content. Please check your network.');
@@ -37,17 +42,77 @@ const ViewBriefModal = ({ file, onClose }) => {
         if (file?.path) load();
     }, [file]);
 
+    const handleSaveEdit = async () => {
+        setIsSaving(true);
+        try {
+             // We need a method to update the file content.
+             // AiNewsService doesn't export updateNewsHistory, but saveNewsToHistory calls putFile.
+             // We can import putFile from AiNewsService? No, it's not exported.
+             // We should add updateNewsHistory to AiNewsService.
+             // For now, let's assume we can add it or use a workaround.
+             // Wait, I can't easily modify AiNewsService here without another tool call.
+             // But I can use saveNewsToHistory logic if I had access.
+             
+             // Let's modify AiNewsService to export a generic update function or use putFile via a new service method.
+             // Since I can't modify service in this turn (I want to do it all at once), I will use a placeholder alert 
+             // and then immediately go to modify the service in the next step.
+             
+             // Actually, I can use the existing saveNewsToHistory but that takes an item object.
+             // I need to save raw markdown.
+             
+             // Let's invoke a service method that I WILL create in the next step: updateBriefContent
+             await updateBriefContent(file.path, editedContent);
+             setContent(editedContent);
+             setIsEditing(false);
+             alert('Brief updated successfully!');
+        } catch (e) {
+            console.error(e);
+            alert('Failed to save changes.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={onClose}>
             <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col shadow-2xl animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
                 <div className="flex items-center justify-between p-4 border-b border-gray-100">
                     <h3 className="font-bold text-lg text-gray-900">{file.name}</h3>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                        <X className="w-5 h-5 text-gray-500" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {!isEditing ? (
+                            <button 
+                                onClick={() => setIsEditing(true)}
+                                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                                title="Edit Brief"
+                            >
+                                <Edit2 className="w-4 h-4" />
+                            </button>
+                        ) : (
+                            <button 
+                                onClick={handleSaveEdit}
+                                disabled={isSaving}
+                                className="px-3 py-1.5 bg-black text-white text-xs font-bold rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+                            >
+                                {isSaving ? 'Saving...' : 'Save'}
+                            </button>
+                        )}
+                        <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                            <X className="w-5 h-5 text-gray-500" />
+                        </button>
+                    </div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
-                    <pre className="whitespace-pre-wrap font-mono text-sm text-gray-700 bg-white p-4 rounded-lg border border-gray-200">{content}</pre>
+                <div className="flex-1 overflow-y-auto p-0 bg-gray-50 relative">
+                    {isEditing ? (
+                        <textarea 
+                            className="w-full h-full p-6 bg-white font-mono text-sm text-gray-700 resize-none focus:outline-none"
+                            value={editedContent}
+                            onChange={(e) => setEditedContent(e.target.value)}
+                        />
+                    ) : (
+                        <div className="p-6">
+                            <pre className="whitespace-pre-wrap font-mono text-sm text-gray-700 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">{content}</pre>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

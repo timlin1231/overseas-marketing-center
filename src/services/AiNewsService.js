@@ -187,12 +187,6 @@ export const deleteNewsHistory = async (path) => {
  */
 export const getBriefContent = async (path) => {
     const file = await getFileContent(path);
-    // getFileContent returns { name, path, sha, size, url, html_url, git_url, download_url, type, content, encoding }
-    // content is base64 encoded usually.
-    // But getFileContent in my previous memory (from other files) might return decoded content if it handles it.
-    // Let's check getFileContent implementation.
-    // If it returns object with `content`, we need to decode it.
-    
     if (file && file.content) {
         // GitHub API returns base64
         try {
@@ -202,4 +196,11 @@ export const getBriefContent = async (path) => {
         }
     }
     return "";
+};
+
+/**
+ * Update brief content
+ */
+export const updateBriefContent = async (path, content) => {
+    return await putFile(path, content, `Update brief content: ${path}`);
 };
