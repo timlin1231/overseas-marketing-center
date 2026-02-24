@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, Globe, Bot, Lock, ArrowRight, Users, Activity } from 'lucide-react';
+import { BookOpen, Globe, Bot, Lock, ArrowRight, Users, Activity, Newspaper } from 'lucide-react';
 
 const Home = () => {
   const tools = [
@@ -8,7 +8,7 @@ const Home = () => {
       id: 1,
       title: '知识库 (Knowledge Base)',
       description: '基于 Obsidian 的第二大脑，可视化管理所有项目与经验。',
-      icon: <BookOpen className="w-8 h-8 text-blue-500" />,
+      icon: <BookOpen className="w-8 h-8" />,
       active: true,
       link: '/knowledge-base',
       statusText: '已就绪',
@@ -18,7 +18,7 @@ const Home = () => {
       id: 2,
       title: 'SEO 深度审计工具',
       description: '一键诊断站点 SEO 健康度，提供专业优化建议与报告导出。',
-      icon: <Activity className="w-8 h-8 text-green-500" />,
+      icon: <Activity className="w-8 h-8" />,
       active: true,
       link: '/seo-audit',
       statusText: 'NEW',
@@ -28,7 +28,7 @@ const Home = () => {
       id: 3,
       title: 'AI 搜索内容合规检测',
       description: '检测内容是否符合 AI 搜索（ChatGPT, Perplexity）的引用标准与最佳实践。',
-      icon: <Bot className="w-8 h-8 text-purple-500" />,
+      icon: <Bot className="w-8 h-8" />,
       active: true,
       link: '/ai-seo',
       statusText: 'NEW',
@@ -36,36 +36,46 @@ const Home = () => {
     },
     {
       id: 4,
+      title: 'AI News Radar',
+      description: '实时追踪全球 AI/Tech 资讯，自动归档至知识库，把握行业风向。',
+      icon: <Newspaper className="w-8 h-8" />,
+      active: true,
+      link: '/ai-news',
+      statusText: 'NEW',
+      techStack: 'Python, RSS Aggregation, NLP'
+    },
+    {
+      id: 5,
       title: 'GEO 内容生产 Agent',
       description: '自动生成针对不同国家/地区的本地化营销内容。',
-      icon: <Globe className="w-8 h-8 text-gray-400" />,
+      icon: <Globe className="w-8 h-8" />,
       active: false,
       statusText: '开发中',
       techStack: 'LangChain, GPT-4, DeepL API'
     },
     {
-      id: 4,
+      id: 6,
       title: '市场自动化信息收集 Agent',
       description: '全网监控竞品动态、行业趋势与关键词排名。',
-      icon: <Bot className="w-8 h-8 text-gray-400" />,
+      icon: <Bot className="w-8 h-8" />,
       active: false,
       statusText: '规划中',
       techStack: 'Playwright, Python, Vector DB'
     },
     {
-      id: 5,
+      id: 7,
       title: 'AI CRM Agent',
       description: '智能化客户关系管理，自动跟进销售线索与邮件回复。',
-      icon: <Users className="w-8 h-8 text-gray-400" />,
+      icon: <Users className="w-8 h-8" />,
       active: false,
       statusText: '规划中',
       techStack: 'OpenAI Assistants API, PostgreSQL'
     },
     {
-      id: 6,
+      id: 8,
       title: '更多 Agent 敬请期待',
       description: '......',
-      icon: <Lock className="w-8 h-8 text-gray-300" />,
+      icon: <Lock className="w-8 h-8" />,
       active: false,
       statusText: '待定',
       techStack: 'TBD'
