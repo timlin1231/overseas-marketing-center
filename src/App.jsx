@@ -6,6 +6,7 @@ import Home from './Home';
 import KnowledgeBase from './KnowledgeBase';
 import SeoAudit from './components/SeoAudit/SeoAudit';
 import AiSeoAudit from './components/AiSeo/AiSeoAudit';
+import AiNewsRadar from './components/AiNews/AiNewsRadar';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
             <Route path="knowledge-base" element={<KnowledgeBase />} />
             <Route path="seo-audit" element={<SeoAudit />} />
             <Route path="ai-seo" element={<AiSeoAudit />} />
+            <Route path="ai-news" element={<AiNewsRadar />} />
           </Route>
         </Routes>
       </Router>

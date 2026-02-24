@@ -11,7 +11,8 @@ import {
   Layout as LayoutIcon,
   ChevronDown,
   Github,
-  Bot
+  Bot,
+  Newspaper
 } from 'lucide-react';
 
 const Layout = () => {
@@ -66,6 +67,11 @@ const Layout = () => {
       label: 'AI 搜索内容合规检测', 
       path: '/ai-seo', 
       icon: Bot 
+    },
+    { 
+      label: 'AI News Radar', 
+      path: '/ai-news', 
+      icon: Newspaper 
     }
   ];
 
